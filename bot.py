@@ -149,7 +149,7 @@ async def main():
 async def schedule_task():
     loop = asyncio.get_running_loop()
     schedule = Scheduler(loop=loop)
-    #schedule.once(datetime.timedelta(seconds=1), check_tg_and_recharge)
+    schedule.once(datetime.timedelta(seconds=check_cooldown), check_tg_and_recharge)
     schedule.cyclic(datetime.timedelta(minutes=check_cooldown), check_tg_and_recharge)
 
     while True:
