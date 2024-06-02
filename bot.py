@@ -12,12 +12,12 @@ from telebot import types
 from telebot.util import user_link
 
 
-target_channel = int(os.environ["TARGET_CHANNEL"])
-check_cooldown = int(os.environ["CHECK_COOLDOWN"])
-panel_username = os.environ["PANEL_USERNAME"]
-panel_pass = os.environ["PANEL_PASS"]
-panel_address = os.environ["PANEL_ADDRESS"]
-bot_token = os.environ["BOT_TOKEN"]
+target_channel = int(os.environ['TARGET_CHANNEL'])
+check_cooldown = int(os.environ['CHECK_COOLDOWN'])
+panel_username = os.environ['PANEL_USERNAME']
+panel_pass = os.environ['PANEL_PASS']
+panel_address = os.environ['PANEL_ADDRESS']
+bot_token = os.environ['BOT_TOKEN']
 
 bot = AsyncTeleBot(bot_token)
 
