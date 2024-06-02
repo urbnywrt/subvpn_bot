@@ -40,7 +40,7 @@ async def vpn_message(message):
         if marzban_user:
             sub_link = marzban_user.subscription_url
         else:
-            print(f"CREATING NEW USER\ntg: {tg_user.user.full_name} - Marzban: SUB_{message.from_user.id}")
+            logger.info(f"CREATING NEW USER\ntg: {tg_user.user.full_name} - Marzban: SUB_{message.from_user.id}")
             marzban_new_user = await add_marzban_user(message.from_user.id, tg_user.user.full_name)
             sub_link = marzban_new_user.subscription_url
 
