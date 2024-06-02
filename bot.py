@@ -1,5 +1,7 @@
 import asyncio
 import os
+from sys import stdout
+
 import telebot
 from scheduler.asyncio import Scheduler
 import datetime
@@ -12,9 +14,10 @@ from telebot import types
 from telebot.util import user_link
 import logging
 
-# Configure the logger
+# Set the logging level to DEBUG
+logging.basicConfig(level=logging.DEBUG)
+# Create a logger
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
 
 target_channel = int(os.environ['TARGET_CHANNEL'])
 check_cooldown = int(os.environ['CHECK_COOLDOWN'])
@@ -142,6 +145,7 @@ async def check_tg_and_recharge():
 
 
 async def main():
+    logger.debug("BOT STARTED")
     await asyncio.gather(bot.polling(), schedule_task())
 
 
