@@ -12,7 +12,7 @@ from telebot import types
 from telebot.util import user_link
 
 
-target_channel = int(os.getenv("TARGET_CHANNEL"))
+target_channel = int(os.environ['TARGET_CHANNEL'])
 check_cooldown = int(os.environ['CHECK_COOLDOWN'])
 panel_username = os.environ['PANEL_USERNAME']
 panel_pass = os.environ['PANEL_PASS']
