@@ -14,11 +14,10 @@ from telebot import types
 from telebot.util import user_link
 import logging
 
+
 logging.basicConfig(level=logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
 logger = logging.getLogger(__name__)
-logger.addHandler(handler)
 
 target_channel = int(os.environ['TARGET_CHANNEL'])
 check_cooldown = int(os.environ['CHECK_COOLDOWN'])
