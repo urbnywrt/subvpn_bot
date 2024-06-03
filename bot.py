@@ -1,19 +1,17 @@
 import asyncio
-import os
-from sys import stdout
-
-import telebot
-from scheduler.asyncio import Scheduler
 import datetime
+import logging
+import os
 from datetime import timedelta
+
 import aiohttp
-from telebot.async_telebot import AsyncTeleBot
+import telebot
 from marzpy import Marzban
 from marzpy.api.user import User
+from scheduler.asyncio import Scheduler
 from telebot import types
+from telebot.async_telebot import AsyncTeleBot
 from telebot.util import user_link
-import logging
-
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -31,33 +29,28 @@ bot = AsyncTeleBot(bot_token)
 
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
-    # user = bot.get_chat_member(chat_id=mob5ter_channel_id, user_id=message.from_user.id)
-    # print('check', user)
-    tg_user = await check_user_in_channel(message.from_user.id)
-    sub_link = ""
-    if tg_user:
-        marzban_user = await check_user_marzban(message.from_user.id)
-        if marzban_user:
-            sub_link = marzban_user.subscription_url
-        else:
-            logger.info(f"CREATING NEW USER\ntg: {tg_user.user.full_name} - Marzban: SUB_{message.from_user.id}")
-            marzban_new_user = await add_marzban_user(message.from_user.id, tg_user.user.full_name)
-            sub_link = marzban_new_user.subscription_url
-
-    keyboardmain = types.InlineKeyboardMarkup()
+    tg_user_id = message.from_user.id
+    tg_user = await check_user_in_channel(tg_user_id)
     welcome_message = f"Ну приветик {user_link(message.from_user)}"
+    keyboardmain = types.InlineKeyboardMarkup()
     if tg_user:
+        sub_link = await get_marzban_sub_url(tg_user_id, tg_user.user.full_name)
         keyboardmain.add(types.InlineKeyboardButton(text='Открыть инструкцию', url=sub_link))
         welcome_message += f"""\nТвоя персональная ссылка на подробную настройку прокси по кнопке ниже"""
     else:
         keyboardmain.add(types.InlineKeyboardButton(text='Подписаться на бусти', url="https://boosty.to/mob5ter"))
         welcome_message = f"""\nОй, а ты не состоишь в нашем чатике для сабской элиты\nНеобходимо привязать тг к бусти, чтоб в него попасть\n\nЕсли ты состоишь в чатике, но не можешь получить через меня инструкцию по использованию прокси, свяжись по контактам ниже для решения вопроса или попроси помощи в чате.\n\n<b>@YABLADAHA</b> <b>@urbnywrt</b>"""
-    #
-    # if c_user:
-    #     print(message, c_user.__dict__, welcome_message)
-    # else:
-    #     print(message, welcome_message)
     await bot.send_message(message.chat.id, text=welcome_message, reply_markup=keyboardmain, parse_mode='HTML')
+
+
+async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
+    marzban_user = await check_user_marzban(tg_user_id)
+    if marzban_user:
+        return marzban_user.subscription_url
+    else:
+        logger.info(f"CREATING NEW USER\ntg: {tg_user_full_name} - Marzban: SUB_{tg_user_id}")
+        marzban_new_user = await add_marzban_user(tg_user_id, tg_user_full_name)
+        return marzban_new_user.subscription_url
 
 
 async def check_user_in_channel(user_id):
