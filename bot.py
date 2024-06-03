@@ -56,7 +56,10 @@ async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
 async def check_user_in_channel(user_id):
     try:
         user = await bot.get_chat_member(chat_id=target_channel, user_id=user_id)
-        return user
+        if user.status in ['member', 'administrator', 'creator']:
+            return user
+        else:
+            return False
     except telebot.asyncio_helper.ApiTelegramException:
         return False
     except Exception as e:
