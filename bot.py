@@ -89,13 +89,14 @@ async def add_marzban_user(tg_id, tg_name):
                                                       "flow": "xtls-rprx-vision"
                                                   }
                                               },
-                                              data_limit=536870912000,
+                                              data_limit=53680912000,
                                               expire=sub_date.timestamp(),
                                               data_limit_reset_strategy="no_reset",
                                               status="active",
                                               inbounds={
                                                   "vless": [
-                                                      "VLESS TCP REALITY"
+                                                      "VLESS TCP REALITY",
+                                                      "VLESS H2 REALITY"
                                                   ]
                                               }), token=mytoken)
         return user
@@ -115,27 +116,27 @@ async def check_tg_and_recharge():
             tg_user_id = str(item.username).replace("SUB_", "")
             user = await check_user_in_channel(user_id=int(tg_user_id))
             if user:
-                # print(user.user.full_name, user.status)
-                if user.status in ['member', 'administrator', 'creator']:
-                    sub_date = datetime.today() + timedelta(days=32)
-                    await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
-                                                                                         note=f"{user.user.full_name}",
-                                                                                         proxies={
-                                                                                             "vless": {
-                                                                                                 "flow": "xtls-rprx-vision"
-                                                                                             }
-                                                                                         },
-                                                                                         data_limit=536870912000,
-                                                                                         expire=sub_date.timestamp(),
-                                                                                         data_limit_reset_strategy="no_reset",
-                                                                                         status="active",
-                                                                                         inbounds={
-                                                                                             "vless": [
-                                                                                                 "VLESS TCP REALITY"
-                                                                                             ]
-                                                                                         }), token=mytoken)
-                    await panel.reset_user_traffic(user_username=f"SUB_{tg_user_id}", token=mytoken)
-                    logger.info(f"recharge {tg_user_id}")
+                # print(user.user.full_name, user.status
+                sub_date = datetime.today() + timedelta(days=32)
+                await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
+                                                                                     note=f"{user.user.full_name}",
+                                                                                     proxies={
+                                                                                         "vless": {
+                                                                                             "flow": "xtls-rprx-vision"
+                                                                                         }
+                                                                                     },
+                                                                                     data_limit=536870912000,
+                                                                                     expire=sub_date.timestamp(),
+                                                                                     data_limit_reset_strategy="no_reset",
+                                                                                     status="active",
+                                                                                     inbounds={
+                                                                                         "vless": [
+                                                                                             "VLESS TCP REALITY",
+                                                                                             "VLESS H2 REALITY"
+                                                                                         ]
+                                                                                     }), token=mytoken)
+                await panel.reset_user_traffic(user_username=f"SUB_{tg_user_id}", token=mytoken)
+                logger.info(f"recharge {tg_user_id}")
             else:
                 logger.info(f"user {tg_user_id} not found on channel")
 
