@@ -117,7 +117,7 @@ async def check_tg_and_recharge():
             user = await check_user_in_channel(user_id=int(tg_user_id))
             if user:
                 # print(user.user.full_name, user.status
-                sub_date = datetime.today() + timedelta(days=32)
+                sub_date = datetime.datetime.today() + timedelta(days=32)
                 await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
                                                                                      note=f"{user.user.full_name}",
                                                                                      proxies={
