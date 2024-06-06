@@ -26,7 +26,7 @@ bot_token = os.environ['BOT_TOKEN']
 
 bot = AsyncTeleBot(bot_token)
 
-#test
+#test222
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
     tg_user_id = message.from_user.id
