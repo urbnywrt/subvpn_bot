@@ -25,8 +25,8 @@ panel_address = os.environ['PANEL_ADDRESS']
 bot_token = os.environ['BOT_TOKEN']
 
 bot = AsyncTeleBot(bot_token)
+panel = Marzban(panel_username, panel_pass, panel_address)
 
-#test123
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
     tg_user_id = message.from_user.id
@@ -48,7 +48,7 @@ async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
     if marzban_user:
         return marzban_user.subscription_url
     else:
-        logger.info(f"CREATING NEW USER\ntg: {tg_user_full_name} - Marzban: SUB_{tg_user_id}")
+        logger.info(f"[MARZBAN] CREATING NEW USER\ntg: {tg_user_full_name} - Marzban: SUB_{tg_user_id}")
         marzban_new_user = await add_marzban_user(tg_user_id, tg_user_full_name)
         return marzban_new_user.subscription_url
 
@@ -58,18 +58,16 @@ async def check_user_in_channel(user_id):
         user = await bot.get_chat_member(chat_id=target_channel, user_id=user_id)
         if user.status in ['member', 'administrator', 'creator']:
             return user
-        else:
-            return False
-    except telebot.asyncio_helper.ApiTelegramException:
-        return False
+    except telebot.asyncio_helper.ApiTelegramException as e:
+        pass
     except Exception as e:
-        logger.warning(e)
-        return False
+        logger.warning(f"[TELEGRAM] ERROR check_user_in_channel: {e}")
+        pass
+    return False
 
 
 async def check_user_marzban(tg_id):
     try:
-        panel = Marzban(panel_username, panel_pass, panel_address)
         mytoken = await panel.get_token()
         user = await panel.get_user(f"SUB_{tg_id}", mytoken)
         return user
@@ -79,7 +77,6 @@ async def check_user_marzban(tg_id):
 
 async def add_marzban_user(tg_id, tg_name):
     try:
-        panel = Marzban(panel_username, panel_pass, panel_address)
         mytoken = await panel.get_token()
         sub_date = datetime.datetime.today() + timedelta(days=31)
         user = await panel.add_user(user=User(username=f"SUB_{tg_id}",
@@ -107,7 +104,6 @@ async def add_marzban_user(tg_id, tg_name):
 
 async def check_tg_and_recharge():
     logger.info("CHECK FOR EXPIRED USERS")
-    panel = Marzban(panel_username, panel_pass, panel_address)
     mytoken = await panel.get_token()
     users = await panel.get_all_users(token=mytoken)
     for item in users:
@@ -142,14 +138,14 @@ async def check_tg_and_recharge():
 
 
 async def main():
-    logger.debug("BOT STARTED")
+    logger.debug(f"BOT STARTED for channel_id {target_channel}")
     await asyncio.gather(bot.polling(), schedule_task())
 
 
 async def schedule_task():
     loop = asyncio.get_running_loop()
     schedule = Scheduler(loop=loop)
-    schedule.once(datetime.timedelta(seconds=check_cooldown), check_tg_and_recharge)
+    schedule.once(datetime.timedelta(seconds=10), check_tg_and_recharge)
     schedule.cyclic(datetime.timedelta(minutes=check_cooldown), check_tg_and_recharge)
 
     while True:
