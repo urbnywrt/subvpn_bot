@@ -13,9 +13,7 @@ from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 from telebot.util import user_link
 
-
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
-
 
 logging.basicConfig(level=LOG_LEVEL)
 
@@ -28,9 +26,9 @@ panel_pass = os.environ['PANEL_PASS']
 panel_address = os.environ['PANEL_ADDRESS']
 bot_token = os.environ['BOT_TOKEN']
 
-
 bot = AsyncTeleBot(bot_token)
 panel = Marzban(panel_username, panel_pass, panel_address)
+
 
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
@@ -48,6 +46,18 @@ async def vpn_message(message):
     await bot.send_message(message.chat.id, text=welcome_message, reply_markup=keyboardmain, parse_mode='HTML')
 
 
+
+async def update_listener(messages):
+    for message in messages:
+        try:
+            if (message.content_type == 'new_chat_members' or message.content_type == 'left_chat_member') and int(message.chat.id) == target_channel:
+                await bot.delete_message(message.chat.id, message.message_id)
+            else:
+                print(message)
+        except Exception as e:
+            logger.error(f"[TELEGRAM] ERROR update_listener:\n {e}")
+
+
 async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
     marzban_user = await check_user_marzban(tg_user_id)
     if marzban_user:
@@ -62,7 +72,7 @@ async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
 async def check_user_in_channel(user_id):
     try:
         user = await bot.get_chat_member(chat_id=target_channel, user_id=user_id)
-        if user.status in ['member', 'administrator', 'creator','restricted']:
+        if user.status in ['member', 'administrator', 'creator', 'restricted']:
             logger.debug(f"[TELEGRAM] USER FOUND\ntg: {user_id}-{user.user.full_name}")
             return user
     except telebot.asyncio_helper.ApiTelegramException as e:
@@ -155,18 +165,20 @@ async def check_tg_and_recharge():
                     logger.info(f"[MARZBAN] user SUB_{tg_user_id} - {user.user.full_name} has been recharged")
                 else:
                     logger.debug(f"[MARZBAN] user SUB_{tg_user_id} not found in channel")
-
-
-            #print(datetime.datetime.from_timestamp(item.expire).strftime('%Y-%m-%d %H:%M:%S'))
     except Exception as e:
         logger.warning(f"[MARZBAN] ERROR check_tg_and_recharge:\n {e}")
 
 
 async def main():
     chat = await bot.get_chat(target_channel)
+    bot.set_update_listener(update_listener)
     logger.info(f"BOT STARTED for {chat.title}")
-    await asyncio.gather(bot.polling(), schedule_task())
-
+    await asyncio.gather(bot.polling(
+        allowed_updates=['message', 'edited_message', 'channel_post', 'edited_channel_post', 'inline_query',
+                         'chosen_inline_result', 'callback_query', 'shipping_query', 'pre_checkout_query', 'poll',
+                         'poll_answer', 'my_chat_member', 'chat_member', 'chat_join_request', 'message_reaction',
+                         'message_reaction_count', 'chat_boost', 'removed_chat_boost', 'business_connection',
+                         'business_message', 'edited_business_message', 'deleted_business_messages']), schedule_task())
 
 
 async def schedule_task():
