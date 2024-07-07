@@ -53,7 +53,7 @@ async def update_listener(messages):
             if (message.content_type == 'new_chat_members' or message.content_type == 'left_chat_member') and int(message.chat.id) == target_channel:
                 await bot.delete_message(message.chat.id, message.message_id)
             else:
-                print(message)
+                logger.debug(message)
         except Exception as e:
             logger.error(f"[TELEGRAM] ERROR update_listener:\n {e}")
 
