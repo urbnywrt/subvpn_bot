@@ -1,7 +1,9 @@
 services:
   app:
     image: ghcr.io/urbnywrt/subvpn_bot:latest
+    restart: unless-stopped
     environment:
+      - LOG_LEVEL=${LOG_LEVEL}
       - BOT_TOKEN=${BOT_TOKEN}
       - CHECK_COOLDOWN=${CHECK_COOLDOWN}
       - PANEL_ADDRESS=${PANEL_ADDRESS}
