@@ -173,7 +173,8 @@ async def main():
     chat = await bot.get_chat(target_channel)
     bot.set_update_listener(update_listener)
     logger.info(f"BOT STARTED for {chat.title}")
-    await asyncio.gather(bot.polling(
+    telebot.apihelper.RETRY_ON_ERROR = True
+    await asyncio.gather(bot.infinity_polling(
         allowed_updates=['message', 'edited_message', 'channel_post', 'edited_channel_post', 'inline_query',
                          'chosen_inline_result', 'callback_query', 'shipping_query', 'pre_checkout_query', 'poll',
                          'poll_answer', 'my_chat_member', 'chat_member', 'chat_join_request', 'message_reaction',
