@@ -109,7 +109,7 @@ async def add_marzban_user(tg_id, tg_name):
                                                       "flow": "xtls-rprx-vision"
                                                   }
                                               },
-                                              data_limit=536870912000,
+                                              data_limit=1610612736000,
                                               expire=sub_date.timestamp(),
                                               data_limit_reset_strategy="no_reset",
                                               status="active",
@@ -151,7 +151,7 @@ async def check_tg_and_recharge():
                                                                                                  "flow": "xtls-rprx-vision"
                                                                                              }
                                                                                          },
-                                                                                         data_limit=536870912000,
+                                                                                         data_limit=1610612736000,
                                                                                          expire=sub_date.timestamp(),
                                                                                          data_limit_reset_strategy="no_reset",
                                                                                          status="active",
