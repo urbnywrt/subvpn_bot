@@ -144,14 +144,10 @@ async def check_tg_and_recharge():
                 if user:
                     # print(user.user.full_name, user.status
                     sub_date = datetime.datetime.today() + timedelta(days=31)
-                    await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
+
+                    test = await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
                                                                                          note=f"{user.user.full_name}",
-                                                                                         proxies={
-                                                                                             "vless": {
-                                                                                                 "id":f"{user.user.id}",
-                                                                                                 "flow": "xtls-rprx-vision"
-                                                                                             }
-                                                                                         },
+                                                                                         proxies=item.proxies,
                                                                                          data_limit=0,
                                                                                          expire=sub_date.timestamp(),
                                                                                          data_limit_reset_strategy="no_reset",
