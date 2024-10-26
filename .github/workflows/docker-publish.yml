@@ -36,4 +36,5 @@ jobs:
             name: subvpn-bot
             file: docker-compose.yaml
             standalone: true
+            env_json: '{"LOG_LEVEL": "INFO","BOT_TOKEN":${{BOT_TOKEN}}}'
              
