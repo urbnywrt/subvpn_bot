@@ -169,7 +169,7 @@ async def check_tg_and_recharge():
 async def main():
     chat = await bot.get_chat(target_channel)
     bot.set_update_listener(update_listener)
-    logger.info(f"BOT STARTED for {chat.title}")
+    logger.info(f"[INIT]BOT STARTED for {chat.title}")
     telebot.apihelper.RETRY_ON_ERROR = True
     await asyncio.gather(bot.infinity_polling(
         allowed_updates=['message', 'edited_message', 'channel_post', 'edited_channel_post', 'inline_query',
