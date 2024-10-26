@@ -142,7 +142,7 @@ async def check_tg_and_recharge():
                     # print(user.user.full_name, user.status
                     sub_date = datetime.datetime.today() + timedelta(days=31)
 
-                    test = await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
+                    await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
                                                                                          note=f"{user.user.full_name}",
                                                                                          proxies=item.proxies,
                                                                                          data_limit=0,
