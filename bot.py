@@ -134,10 +134,7 @@ async def check_tg_and_recharge():
         for item in users:
             if item.status == 'expired' and "SUB_" in item.username:
                 # print(item.username + " " + item.status)
-                if datetime.datetime.now() - datetime.datetime.fromtimestamp(item.expire) > timedelta(days=30):
-                    await panel.delete_user(item.username, token=mytoken)
-                    logger.info(f"[MARZBAN] USER EXPIRED FOR 30 DAYS AND DELETED : {item.username}")
-                    continue
+
 
                 tg_user_id = str(item.username).replace("SUB_", "")
                 user = await check_user_in_channel(user_id=int(tg_user_id))
@@ -162,6 +159,9 @@ async def check_tg_and_recharge():
                     logger.info(f"[MARZBAN] user SUB_{tg_user_id} - {user.user.full_name} has been recharged")
                 else:
                     logger.debug(f"[MARZBAN] user SUB_{tg_user_id} not found in channel")
+                    if datetime.datetime.now() - datetime.datetime.fromtimestamp(item.expire) > timedelta(days=30):
+                        await panel.delete_user(item.username, token=mytoken)
+                        logger.info(f"[MARZBAN] USER EXPIRED FOR 30 DAYS AND DELETED : {item.username}")
     except Exception as e:
         logger.warning(f"[MARZBAN] ERROR check_tg_and_recharge:\n {e}")
 
