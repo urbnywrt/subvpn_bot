@@ -35,4 +35,5 @@ jobs:
             url: ${{ secrets.PORTAINER_HOST }}
             name: subvpn-bot
             file: docker-compose.yaml
+            standalone: true
              
