@@ -6,12 +6,11 @@ from datetime import timedelta
 
 import aiohttp
 import telebot
-from marzpy import Marzban
-from marzpy.api.user import User
 from scheduler.asyncio import Scheduler
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 from telebot.util import user_link
+from marzban import MarzbanAPI, UserCreate, UserModify, ProxySettings
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
 
@@ -25,10 +24,9 @@ panel_username = os.environ['PANEL_USERNAME']
 panel_pass = os.environ['PANEL_PASS']
 panel_address = os.environ['PANEL_ADDRESS']
 bot_token = os.environ['BOT_TOKEN']
-
+api = MarzbanAPI(base_url=panel_address)
 bot = AsyncTeleBot(bot_token)
-panel = Marzban(panel_username, panel_pass, panel_address)
-
+# panel = Marzban(panel_username, panel_pass, panel_address)
 
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
@@ -86,8 +84,8 @@ async def check_user_in_channel(user_id):
 
 async def check_user_marzban(tg_id):
     try:
-        mytoken = await panel.get_token()
-        user = await panel.get_user(f"SUB_{tg_id}", mytoken)
+        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
+        user = await api.get_user(username=f"SUB_{tg_id}", token=marzban_token.access_token)
         logger.debug(f"[MARZBAN] USER FOUND: SUB_{tg_id}-{user.note}")
         return user
     except aiohttp.client_exceptions.ClientResponseError as e:
@@ -100,25 +98,23 @@ async def check_user_marzban(tg_id):
 
 async def add_marzban_user(tg_id, tg_name):
     try:
-        mytoken = await panel.get_token()
+        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
         sub_date = datetime.datetime.today() + timedelta(days=31)
-        user = await panel.add_user(user=User(username=f"SUB_{tg_id}",
+        new_user = UserCreate(username=f"SUB_{tg_id}",
                                               note=f"{tg_name}",
                                               proxies={
-                                                  "vless": {
-                                                      "flow": "xtls-rprx-vision"
-                                                  }
+                                                  "vless": ProxySettings(flow="xtls-rprx-vision")                                                  
                                               },
-                                              data_limit=0,
-                                              expire=sub_date.timestamp(),
-                                              data_limit_reset_strategy="no_reset",
+                                              expire= int(sub_date.timestamp()),                                            
                                               status="active",
                                               inbounds={
                                                   "vless": [
-                                                      "VLESS TCP REALITY",
-                                                      "VLESS H2 REALITY"
+                                                      "VLESS TCP REALITY"
                                                   ]
-                                              }), token=mytoken)
+                                              })
+        # print(new_user)
+        user = await api.add_user(user=new_user, token=marzban_token.access_token)
+
         logging.info(f"[MARZBAN] USER CREATED: SUB_{tg_id}-{user.note}")
         return user
     except Exception as e:
@@ -128,10 +124,10 @@ async def add_marzban_user(tg_id, tg_name):
 
 async def check_tg_and_recharge():
     logger.debug("CHECK FOR EXPIRED USERS")
-    mytoken = await panel.get_token()
-    users = await panel.get_all_users(token=mytoken)
+    marzban_token = await api.get_token(username=panel_username, password=panel_pass)
+    users = await api.get_users(token=marzban_token.access_token)
     try:
-        for item in users:
+        for item in users.users:
             if item.status == 'expired' and "SUB_" in item.username:
                 # print(item.username + " " + item.status)
 
@@ -142,31 +138,31 @@ async def check_tg_and_recharge():
                     # print(user.user.full_name, user.status
                     sub_date = datetime.datetime.today() + timedelta(days=31)
 
-                    await panel.modify_user(user_username=f"SUB_{tg_user_id}", user=User(username=f"SUB_{tg_user_id}",
+                    await api.modify_user(username=f"SUB_{tg_user_id}", user=UserModify(username=f"SUB_{tg_user_id}",
                                                                                          note=f"{user.user.full_name}",
                                                                                          proxies=item.proxies,
                                                                                          data_limit=0,
-                                                                                         expire=sub_date.timestamp(),
+                                                                                         expire=int(sub_date.timestamp()),
                                                                                          data_limit_reset_strategy="no_reset",
                                                                                          status="active",
                                                                                          inbounds={
                                                                                              "vless": [
-                                                                                                 "VLESS TCP REALITY",
-                                                                                                 "VLESS H2 REALITY"
+                                                                                                 "VLESS TCP REALITY"
                                                                                              ]
-                                                                                         }), token=mytoken)
+                                                                                         }), token=marzban_token.access_token)
                     #await panel.reset_user_traffic(user_username=f"SUB_{tg_user_id}", token=mytoken)
                     logger.info(f"[MARZBAN] user SUB_{tg_user_id} - {user.user.full_name} has been recharged")
                 else:
                     logger.debug(f"[MARZBAN] user SUB_{tg_user_id} not found in channel")
                     if datetime.datetime.now() - datetime.datetime.fromtimestamp(item.expire) > timedelta(days=30):
-                        await panel.delete_user(item.username, token=mytoken)
+                        await api.remove_user(username=item.username, token=marzban_token.access_token)
                         logger.info(f"[MARZBAN] USER EXPIRED FOR 30 DAYS AND DELETED : {item.username}")
     except Exception as e:
         logger.warning(f"[MARZBAN] ERROR check_tg_and_recharge:\n {e}")
 
 
 async def main():
+    
     chat = await bot.get_chat(target_channel)
     bot.set_update_listener(update_listener)
     logger.info(f"[INIT]BOT STARTED for {chat.title}")
