@@ -61,6 +61,6 @@ if __name__ == "__main__":
         app, 
         host="0.0.0.0", 
         port=port,
-        ssl_keyfile="./privkey5.pem",
-        ssl_certfile="./fullchain5.pem"
+        ssl_keyfile="/certs/key.pem",
+        ssl_certfile="/certs/fullchain.pem"
     ) 
