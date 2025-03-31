@@ -5,7 +5,7 @@ services:
     build: .
     container_name: subvpn_bot
     volumes:
-      - /var/lib/marzban/certs:/var/lib/marzban/certs:ro
+      - /var/lib/marzban/certs:/certs:ro
     ports:
       - "${PROXY_PORT}:${PROXY_PORT}"  # Порт для прокси-сервера
     environment:

@@ -7,6 +7,7 @@ import os
 app = FastAPI()
 
 # Словарь с URL-схемами для разных приложений
+# Словарь с URL-схемами для разных приложений
 APP_URL_SCHEMES = {
     'ios': {
         'streisand': 'streisand://import/{url}#{name}',
@@ -19,7 +20,8 @@ APP_URL_SCHEMES = {
     },
     'android': {
         'nekoray': 'sn://subscription?url={url}&name={name}',
-        'v2rayng': 'v2rayng://install-sub?url={url}&name={name}'
+        'v2rayng': 'v2rayng://install-sub?url={url}&name={name}',
+        'hiddify': 'hiddify://install-config/?url={url}'
     },
     'pc': {
         'clashx': 'clashx://install-config?url={url}',
@@ -27,7 +29,6 @@ APP_URL_SCHEMES = {
         'hiddify': 'hiddify://install-config/?url={url}'
     }
 }
-
 @app.get("/redirect/{system}/{app}")
 async def redirect_to_app(system: str, app: str, url: str, name: str = None):
     """Перенаправляет на URL-схему приложения."""
@@ -63,6 +64,6 @@ if __name__ == "__main__":
         app, 
         host="0.0.0.0", 
         port=port,
-        ssl_keyfile="/var/lib/marzban/certs/key.pem",
-        ssl_certfile="/var/lib/marzban/certs/fullchain.pem"
+        ssl_keyfile="./privkey5.pem",
+        ssl_certfile="./fullchain5.pem"
     ) 

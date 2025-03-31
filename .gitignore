@@ -4,3 +4,12 @@
 venv/
 __pycache__/
 *.pyc
+*.pem
+*.crt
+*.key
+*.csr
+*.pfx
+*.p12
+*.p12
+.vscode/ 
+

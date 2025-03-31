@@ -26,7 +26,8 @@ APP_URL_SCHEMES = {
     },
     'android': {
         'nekoray': 'sn://subscription?url={url}&name={name}',
-        'v2rayng': 'v2rayng://install-sub?url={url}&name={name}'
+        'v2rayng': 'v2rayng://install-sub?url={url}&name={name}',
+        'hiddify': 'hiddify://install-config/?url={url}'
     },
     'pc': {
         'clashx': 'clashx://install-config?url={url}',
