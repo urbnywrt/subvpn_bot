@@ -7,7 +7,7 @@ services:
     volumes:
       - /var/lib/marzban/certs:/var/lib/marzban/certs:ro
     ports:
-      - "${PROXY_PORT}:${PROXY_PORT}"  # Порт для прокси-сервера
+      - "4443:${PROXY_PORT}"  # Порт для прокси-сервера
     environment:
       - TARGET_CHANNEL=${TARGET_CHANNEL}
       - CHECK_COOLDOWN=${CHECK_COOLDOWN}
