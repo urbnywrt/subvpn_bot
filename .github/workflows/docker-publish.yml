@@ -34,7 +34,7 @@ jobs:
             token: ${{ secrets.PORTAINER_TOKEN }}
             url: ${{ secrets.PORTAINER_HOST }}
             name: subvpn-bot
-            file: docker-compose.yaml
+            file: docker-compose.yml
             standalone: true
             env_json: '{"LOG_LEVEL": "INFO","BOT_TOKEN": "${{secrets.BOT_TOKEN}}","CHECK_COOLDOWN": "10","PANEL_ADDRESS":"${{secrets.PANEL_ADDRESS}}","PANEL_PASS":"${{secrets.PANEL_PASS}}","PANEL_USERNAME":"${{secrets.PANEL_USERNAME}}","TARGET_CHANNEL":"${{secrets.TARGET_CHANNEL}}"}'
              

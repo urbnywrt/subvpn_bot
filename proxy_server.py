@@ -1,0 +1,68 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse, HTMLResponse
+import uvicorn
+import urllib.parse
+import os
+
+app = FastAPI()
+
+# Словарь с URL-схемами для разных приложений
+APP_URL_SCHEMES = {
+    'ios': {
+        'streisand': 'streisand://import/{url}#{name}',
+        'karing': 'karing://install-config?url={url}&name={name}',
+        'foxray': 'foxray://yiguo.dev/sub/add/?url={url}#{name}',
+        'v2box': 'v2box://install-sub?url={url}&name={name}',
+        'singbox': 'sing-box://import-remote-profile?url={url}#{name}',
+        'shadowrocket': 'sub://{url}',
+        'happ': 'happ://add/{url}'
+    },
+    'android': {
+        'nekoray': 'sn://subscription?url={url}&name={name}',
+        'v2rayng': 'v2rayng://install-sub?url={url}&name={name}'
+    },
+    'pc': {
+        'clashx': 'clashx://install-config?url={url}',
+        'clash': 'clash://install-config?url={url}',
+        'hiddify': 'hiddify://install-config/?url={url}'
+    }
+}
+
+@app.get("/redirect/{system}/{app}")
+async def redirect_to_app(system: str, app: str, url: str, name: str = None):
+    """Перенаправляет на URL-схему приложения."""
+    if system not in APP_URL_SCHEMES or app not in APP_URL_SCHEMES[system]:
+        raise HTTPException(status_code=404, detail="Invalid system or app")
+    
+    scheme = APP_URL_SCHEMES[system][app]
+    encoded_url = urllib.parse.quote(url)
+    encoded_name = urllib.parse.quote(name) if name else ""
+    
+    app_url = scheme.format(url=encoded_url, name=encoded_name)
+    
+    # Создаем HTML-страницу с автоматическим перенаправлением
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Перенаправление...</title>
+        <meta http-equiv="refresh" content="0;url={app_url}">
+    </head>
+    <body>
+        <p>Перенаправление на приложение...</p>
+        <p>Если перенаправление не произошло автоматически, <a href="{app_url}">нажмите здесь</a></p>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PROXY_PORT", "8443"))
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=port,
+        ssl_keyfile="/var/lib/marzban/certs/key.pem",
+        ssl_certfile="/var/lib/marzban/certs/fullchain.pem"
+    ) 

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: subvpn_bot
+    volumes:
+      - /var/lib/marzban/certs:/var/lib/marzban/certs:ro
+    ports:
+      - "${PROXY_PORT}:${PROXY_PORT}"  # Порт для прокси-сервера
+    environment:
+      - TARGET_CHANNEL=${TARGET_CHANNEL}
+      - CHECK_COOLDOWN=${CHECK_COOLDOWN}
+      - PANEL_USERNAME=${PANEL_USERNAME}
+      - PANEL_PASS=${PANEL_PASS}
+      - PANEL_ADDRESS=${PANEL_ADDRESS}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PROXY_DOMAIN=${PROXY_DOMAIN}
+      - PROXY_PORT=${PROXY_PORT}
+    restart: unless-stopped 
