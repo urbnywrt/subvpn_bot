@@ -9,9 +9,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копирование файлов приложения
 COPY bot.py .
 COPY proxy_server.py .
+COPY index.html .
 
-# Создание директории для сертификатов
+# Создание директорий
 RUN mkdir -p /var/lib/marzban/certs
+RUN mkdir -p /app/static
 
 # Установка переменных окружения
 ENV PYTHONUNBUFFERED=1

@@ -7,7 +7,6 @@ import os
 app = FastAPI()
 
 # Словарь с URL-схемами для разных приложений
-# Словарь с URL-схемами для разных приложений
 APP_URL_SCHEMES = {
     'ios': {
         'streisand': 'streisand://import/{url}#{name}',
@@ -15,7 +14,6 @@ APP_URL_SCHEMES = {
         'foxray': 'foxray://yiguo.dev/sub/add/?url={url}#{name}',
         'v2box': 'v2box://install-sub?url={url}&name={name}',
         'singbox': 'sing-box://import-remote-profile?url={url}#{name}',
-        'shadowrocket': 'sub://{url}',
         'happ': 'happ://add/{url}'
     },
     'android': {
@@ -36,10 +34,9 @@ async def redirect_to_app(system: str, app: str, url: str, name: str = None):
         raise HTTPException(status_code=404, detail="Invalid system or app")
     
     scheme = APP_URL_SCHEMES[system][app]
-    encoded_url = urllib.parse.quote(url)
-    encoded_name = urllib.parse.quote(name) if name else ""
     
-    app_url = scheme.format(url=encoded_url, name=encoded_name)
+    # Используем стандартное форматирование для всех приложений
+    app_url = scheme.format(url=url, name=name if name else "")
     
     # Создаем HTML-страницу с автоматическим перенаправлением
     html_content = f"""

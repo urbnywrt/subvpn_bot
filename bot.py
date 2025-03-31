@@ -13,26 +13,60 @@ from telebot.async_telebot import AsyncTeleBot
 from telebot.util import user_link
 from marzban import MarzbanAPI, UserCreate, UserModify, ProxySettings
 
+# Настройка логирования
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(level=LOG_LEVEL)
+logger = logging.getLogger(__name__)
+
+# Загрузка переменных окружения
+target_channel = int(os.environ['TARGET_CHANNEL'])
+check_cooldown = int(os.environ['CHECK_COOLDOWN'])
+panel_username = os.environ['PANEL_USERNAME']
+panel_pass = os.environ['PANEL_PASS']
+panel_address = os.environ['PANEL_ADDRESS']
+bot_token = os.environ['BOT_TOKEN']
+proxy_domain = os.environ['PROXY_DOMAIN']
+proxy_port = os.environ['PROXY_PORT']
+admin_ids = [int(id.strip()) for id in os.environ.get('ADMIN_ID', '').split(',') if id.strip()]
+
 # Словарь с URL-схемами для разных приложений
 APP_URL_SCHEMES = {
     'ios': {
         'streisand': 'streisand://import/{url}#{name}',
-        'karing': 'karing://install-config?url={url}&name={name}',
+        # 'karing': 'karing://install-config?url={url}&name={name}',  # Закомментировали URL-схему для Karing
         'foxray': 'foxray://yiguo.dev/sub/add/?url={url}#{name}',
         'v2box': 'v2box://install-sub?url={url}&name={name}',
-        'singbox': 'sing-box://import-remote-profile?url={url}#{name}',
-        'shadowrocket': 'sub://{url}',
-        'happ': 'happ://add/{url}'
+        'singbox': 'sing-box://import-remote-profile?url={url}#{name}'
     },
     'android': {
-        'nekoray': 'sn://subscription?url={url}&name={name}',
         'v2rayng': 'v2rayng://install-sub?url={url}&name={name}',
         'hiddify': 'hiddify://install-config/?url={url}'
     },
     'pc': {
-        'clashx': 'clashx://install-config?url={url}',
-        'clash': 'clash://install-config?url={url}',
         'hiddify': 'hiddify://install-config/?url={url}'
+    }
+}
+
+# Словарь со ссылками на скачивание приложений
+APP_DOWNLOAD_LINKS = {
+    'ios': {
+        'streisand': 'https://apps.apple.com/app/streisand/id6450534064',
+        'karing': 'https://apps.apple.com/app/karing/id6472431552',
+        'foxray': 'https://apps.apple.com/app/foxray/id6448898396',
+        'v2box': 'https://apps.apple.com/app/v2box/id6446814690',
+        # 'singbox': 'https://apps.apple.com/app/sing-box/id6450509028',
+        'shadowrocket': 'https://apps.apple.com/app/shadowrocket/id932747118',
+        'happ': 'https://apps.apple.com/app/happ-proxy-utility/id6504287215'
+    },
+    'android': {
+        'v2rayng': 'https://play.google.com/store/apps/details?id=com.v2ray.ang',
+        'hiddify': 'https://play.google.com/store/apps/details?id=app.hiddify.com',
+        'V2RayTun': 'https://play.google.com/store/apps/details?id=com.v2raytun.android',
+    },
+    'pc': {
+        'hiddify': 'https://apps.microsoft.com/store/detail/hiddify-next/9N2B0K8Z5Z5F',
+        'v2rayN': 'https://github.com/2dust/v2rayN/releases/latest',
+        'karing': 'https://github.com/KaringX/karing/releases/latest'
     }
 }
 
@@ -42,165 +76,331 @@ async def generate_app_specific_link(base_url: str, system: str, app: str, user_
         return base_url
     
     # Формируем URL для прокси-сервера
-    proxy_url = f"https://{os.environ['PROXY_DOMAIN']}:{os.environ['PROXY_PORT']}/redirect/{system}/{app}"
-    params = {
-        "url": base_url,
-        "name": user_name
-    }
+    proxy_url = f"https://{proxy_domain}:{proxy_port}/redirect/{system}/{app}"
     
-    # Добавляем параметры к URL
-    query_string = urllib.parse.urlencode(params)
-    return f"{proxy_url}?{query_string}"
+    # Для всех приложений используем прямой формат без кодирования
+    return f"{proxy_url}?url={base_url}&name={user_name}"
 
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
-
-logging.basicConfig(level=LOG_LEVEL)
-
-logger = logging.getLogger(__name__)
-
-target_channel = int(os.environ['TARGET_CHANNEL'])
-check_cooldown = int(os.environ['CHECK_COOLDOWN'])
-panel_username = os.environ['PANEL_USERNAME']
-panel_pass = os.environ['PANEL_PASS']
-panel_address = os.environ['PANEL_ADDRESS']
-bot_token = os.environ['BOT_TOKEN']
+# Инициализация API и бота
 api = MarzbanAPI(base_url=panel_address)
 bot = AsyncTeleBot(bot_token)
-bot.user_data = {}  # Словарь для хранения данных пользователей
+bot.user_data = {}
 # panel = Marzban(panel_username, panel_pass, panel_address)
 
 @bot.message_handler(commands=['vpn', 'start'])
 async def vpn_message(message):
+    if message.chat.type != 'private':
+        return
     tg_user_id = message.from_user.id
     tg_user = await check_user_in_channel(tg_user_id)
-    welcome_message = f"Ну приветик {user_link(message.from_user)}"
+    welcome_message = f"👋 Привет, {user_link(message.from_user)}!\n\n"
     
     if tg_user:
         sub_link = await get_marzban_sub_url(tg_user_id, tg_user.user.full_name)
-        keyboardmain = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        keyboardmain.add(types.KeyboardButton("📱 Выбрать приложение"))
-        keyboardmain.add(types.KeyboardButton("🔗 Получить общую ссылку"))
-        
-        welcome_message += f"""\nВыберите действие:"""
         
         # Сохраняем ссылку в сессии пользователя
         bot.user_data[message.from_user.id] = {'sub_link': sub_link}
         
+        welcome_message += """🎉 Добро пожаловать в бота SubVPN!
+
+Я помогу вам настроить VPN на вашем устройстве. У нас есть поддержка следующих платформ:
+• 📱 iOS/MacOS
+• 🤖 Android
+• 💻 Windows
+
+Выберите вашу платформу, и я предоставлю подробные инструкции по установке и настройке VPN.
+
+ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться к администраторам:
+• @urbnywrt
+• @SanchezM
+• @YABLADAHA"""
+        
+        # Создаем inline-кнопки для выбора платформы
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📱 iOS/MacOS", callback_data="platform_ios"),
+            types.InlineKeyboardButton("🤖 Android", callback_data="platform_android"),
+            types.InlineKeyboardButton("💻 PC", callback_data="platform_pc")
+        )
+        
         await bot.send_message(
             message.chat.id, 
             text=welcome_message, 
-            reply_markup=keyboardmain, 
+            reply_markup=markup, 
             parse_mode='HTML'
         )
     else:
         keyboardmain = types.InlineKeyboardMarkup()
         keyboardmain.add(types.InlineKeyboardButton(text='Подписаться на бусти', url="https://boosty.to/mob5ter"))
-        welcome_message = f"""\nОй, а ты не состоишь в нашем чатике для сабской элиты\nНеобходимо привязать тг к бусти, чтоб в него попасть\n\nЕсли ты состоишь в чатике, но не можешь получить через меня инструкцию по использованию прокси, свяжись по контактам ниже для решения вопроса или попроси помощи в чате.\n\n<b>@YABLADAHA</b> <b>@urbnywrt</b>"""
+        welcome_message = f"""❌ Упс! Похоже, вы не являетесь подписчиком нашего сервиса.
+
+Для получения доступа к VPN необходимо:
+1. Подписаться на наш Boosty
+2. Привязать Telegram к аккаунту Boosty
+3. Получить доступ к закрытому каналу
+
+Если у вас уже есть подписка, но вы не можете получить доступ:
+• Свяжитесь с администраторами: @YABLADAHA или @urbnywrt
+• Или обратитесь за помощью в чате"""
         await bot.send_message(message.chat.id, text=welcome_message, reply_markup=keyboardmain, parse_mode='HTML')
 
-@bot.message_handler(func=lambda message: message.text == "📱 Выбрать приложение")
-async def select_system(message: types.Message):
-    """Обработчик для выбора системы."""
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("iOS"))
-    markup.add(types.KeyboardButton("Android"))
-    markup.add(types.KeyboardButton("PC"))
-    markup.add(types.KeyboardButton("🔙 Назад"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('platform_'))
+async def handle_platform_selection(call):
+    """Обработчик выбора платформы."""
+    if call.message.chat.type != 'private':
+        return
+    platform = call.data.split('_')[1]
+    platform_names = {
+        'ios': 'iOS/MacOS',
+        'android': 'Android',
+        'pc': 'PC'
+    }
     
-    await bot.send_message(
-        message.chat.id,
-        "Выберите вашу операционную систему:",
+    # Создаем inline-кнопки для приложений
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    for app in APP_DOWNLOAD_LINKS[platform].keys():
+        markup.add(types.InlineKeyboardButton(
+            text=app.capitalize(),
+            callback_data=f"app_{platform}_{app}"
+        ))
+    markup.add(types.InlineKeyboardButton(text="🏠 В главное меню", callback_data="refresh_menu"))
+    
+    await bot.edit_message_text(
+        f"Вы выбрали {platform_names[platform]}\n\nВыберите приложение:",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
         reply_markup=markup
     )
 
-@bot.message_handler(func=lambda message: message.text == "🔗 Получить общую ссылку")
-async def get_general_link(message: types.Message):
-    """Обработчик для получения общей ссылки."""
-    if message.from_user.id not in bot.user_data or 'sub_link' not in bot.user_data[message.from_user.id]:
-        await bot.send_message(message.chat.id, "Ошибка: не удалось найти вашу ссылку. Пожалуйста, начните заново с команды /start")
+@bot.callback_query_handler(func=lambda call: call.data.startswith('app_'))
+async def handle_app_selection(call):
+    """Обработчик выбора приложения."""
+    if call.message.chat.type != 'private':
+        return
+    _, platform, app = call.data.split('_')
+    app_name = app.capitalize()
+    
+    if call.from_user.id not in bot.user_data or 'sub_link' not in bot.user_data[call.from_user.id]:
+        await bot.answer_callback_query(call.id, "Ошибка: не удалось найти вашу ссылку. Пожалуйста, начните заново с команды /start")
         return
     
-    sub_link = bot.user_data[message.from_user.id]['sub_link']
+    base_url = bot.user_data[call.from_user.id]['sub_link']
+    
+    # Создаем сообщение с информацией о приложении
+    message_text = f"📱 {app_name}\n\n"
+    
+    # Добавляем ссылку на скачивание
+    download_link = APP_DOWNLOAD_LINKS[platform][app]
+    message_text += f"📥 Скачать приложение: {download_link}\n\n"
+    
+    # Создаем markup в начале
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🔗 Открыть ссылку", url=sub_link))
     
-    await bot.send_message(
-        message.chat.id,
-        "Нажмите на кнопку ниже, чтобы открыть вашу ссылку:",
+    # Проверяем, есть ли URL-схема для приложения
+    if platform in APP_URL_SCHEMES and app in APP_URL_SCHEMES[platform]:
+        # Генерируем специфическую ссылку
+        app_link = await generate_app_specific_link(
+            base_url,
+            platform,
+            app,
+            f"SubVPN_{call.from_user.id}"
+        )
+        message_text += f"🔗 Нажмите кнопку ниже для автоматической настройки:"
+        markup.add(types.InlineKeyboardButton(text="⚙️ Настроить автоматически", url=app_link))
+    else:
+        # Показываем инструкцию для ручного добавления
+        if app == 'V2RayTun':
+            message_text += f"""⚙️ Инструкция по настройке {app_name}:
+
+1. Нажмите на кнопку "Открыть общую ссылку" ниже и скопируйте её
+2. Откройте приложение {app_name}
+3. Нажмите на кнопку "+" в правом верхнем углу
+4. Выберите "Импорт из буфера обмена"
+
+После добавления конфигурации, нажмите "Подключиться" или "Start"."""
+            markup.add(types.InlineKeyboardButton(text="🔗 Открыть общую ссылку", url=base_url))
+        elif app == 'v2rayN':
+            message_text += f"""⚙️ Инструкция по настройке {app_name}:
+
+1. Нажмите на кнопку "Открыть общую ссылку" ниже и скопируйте её
+
+2. В приложении V2RayN нажмите «Сервера» → «Импорт массива URL из буфера обмена».
+
+3. Затем нажмите кнопку «Группа подписки» → «Обновить подписку без прокси». В приложении загрузится список всех доступных локаций.
+
+4. Активируйте VPN:
+   • Выберите нужную вам локацию, кликните по ней правой кнопкой мыши и выберите «Установить как активный сервер».
+   • В нижней части окна приложения установите параметр «Системный прокси» в режим «Установить системный прокси». Иконка приложения изменится на красную - значит, подключение установлено.
+   • Активируйте «Режим VPN» в клиенте. Он находится рядом с параметром «Системный прокси» внизу.
+
+Готово! Теперь на вашем устройстве настроен быстрый и надёжный VPN.
+
+ℹ️ Для отключения VPN:
+   • Смените параметр «Системный прокси» на «Очистить системный прокси»
+   • Выключите «Режим VPN»."""
+            markup.add(types.InlineKeyboardButton(text="🔗 Открыть общую ссылку", url=base_url))
+        elif app == 'karing':
+            # Добавляем информацию об установке в зависимости от платформы
+            if platform == 'android':
+                message_text += f"""📥 Установка приложения:
+• Скачайте APK-файл по ссылке выше
+• Установите приложение с помощью APK-файла
+
+"""
+            elif platform == 'pc':
+                message_text += f"""📥 Установка приложения:
+• Скачайте установочный файл по ссылке выше
+• Запустите установщик от имени Администратора
+
+"""
+            elif platform == 'ios':
+                message_text += f"""📥 Установка приложения:
+• Установите приложение из App Store по ссылке выше
+
+"""
+
+            message_text += f"""⚙️ Настройка приложения:
+
+1. Запустите приложение "Karing"
+2. Согласитесь с политиками приложения
+3. В разделе "Язык" выберите русский язык и нажмите "Next"
+4. В разделе "Страна или регион" найдите и выберите "Российская Федерация", нажмите "Дальше"
+5. В разделе "Шаблоны личных правил" нажмите "Дальше"
+6. В разделе "Настройка" оставьте переключатель "Режим новичка" включенным, нажмите "Готово"
+
+🔗 Импорт конфигурации:
+1. Нажмите на кнопку "Открыть общую ссылку" ниже и скопируйте её
+2. В разделе "Добавить профиль" нажмите "Импорт из буфера обмена"
+3. Вверху экрана нажмите на галочку и "Ок" в появившемся окне
+4. Выйдите из раздела "Добавить профиль" нажав на стрелку в левом верхнем углу
+
+🔄 Активация:
+1. Включите приложение с помощью большой кнопки"""
+
+            # Добавляем информацию о первом запуске в зависимости от платформы
+            if platform == 'pc':
+                message_text += f"""
+2. При первом запуске на Windows:
+   • Позвольте доступ к сети
+   • Включите режим работы "Системный прокси"
+   • Выберите режим работы правил перенаправления "Глобально":
+     • "Правила" - через ВПН будут работать только указанные сайты
+     • "Глобально" - через ВПН будут работать все сайты без исключений"""
+            elif platform == 'ios':
+                message_text += f"""
+2. При первом запуске:
+   • Позвольте приложению добавить новый ВПН-профиль в настройки системы
+   • Включите режим работы "Системный прокси"
+   • Выберите режим работы правил перенаправления "Глобально":
+     • "Правила" - через ВПН будут работать только указанные сайты
+     • "Глобально" - через ВПН будут работать все сайты без исключений
+   • Перейдите в настройки iOS/MacOS
+   • Выберите "VPN и управление устройством"
+   • Найдите профиль Karing и нажмите "Установить"
+   • Введите пароль устройства для подтверждения
+   • Нажмите "Установить" в появившемся окне
+   • Вернитесь в приложение Karing"""
+            else:  # android
+                message_text += f"""
+2. Включите режим работы "Системный прокси"
+3. Выберите режим работы правил перенаправления "Глобально":
+   • "Правила" - через ВПН будут работать только указанные сайты
+   • "Глобально" - через ВПН будут работать все сайты без исключений"""
+            
+            markup.add(types.InlineKeyboardButton(text="🔗 Открыть общую ссылку", url=base_url))
+        else:
+            # Универсальная инструкция для остальных приложений
+            message_text += f"""⚙️ Инструкция по настройке {app_name}:
+
+1. Нажмите на кнопку "Открыть общую ссылку" ниже и скопируйте её
+2. Откройте приложение {app_name}
+3. Найдите раздел "Импорт" или "Добавить подписку"
+4. Вставьте скопированную ссылку
+5. Сохраните конфигурацию
+6. Включите VPN
+
+ℹ️ Если у вас возникнут проблемы:
+• Убедитесь, что ссылка скопирована полностью
+• Проверьте подключение к интернету
+• Попробуйте перезапустить приложение
+• При необходимости обратитесь к администраторам"""
+            markup.add(types.InlineKeyboardButton(text="🔗 Открыть общую ссылку", url=base_url))
+    
+    # Добавляем кнопки навигации
+    markup.add(types.InlineKeyboardButton(text="🔙 Назад к выбору приложений", callback_data=f"platform_{platform}"))
+    markup.add(types.InlineKeyboardButton(text="🏠 В главное меню", callback_data="refresh_menu"))
+    
+    await bot.edit_message_text(
+        message_text,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
         reply_markup=markup
     )
 
-@bot.message_handler(func=lambda message: message.text in ["iOS", "Android", "PC"])
-async def select_app(message: types.Message):
-    """Обработчик для выбора приложения."""
-    system = message.text.lower()
-    if system not in APP_URL_SCHEMES:
-        await bot.send_message(message.chat.id, "Неверный выбор системы")
+@bot.callback_query_handler(func=lambda call: call.data == "refresh_menu")
+async def handle_refresh_menu(call):
+    """Обработчик обновления меню."""
+    if call.message.chat.type != 'private':
         return
-
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for app in APP_URL_SCHEMES[system].keys():
-        markup.add(types.KeyboardButton(app.capitalize()))
-    markup.add(types.KeyboardButton("🔙 Назад"))
+    tg_user_id = call.from_user.id
+    tg_user = await check_user_in_channel(tg_user_id)
+    welcome_message = f"👋 Привет, {user_link(call.from_user)}!\n\n"
     
-    await bot.send_message(
-        message.chat.id,
-        "Выберите приложение:",
-        reply_markup=markup
-    )
+    if tg_user:
+        sub_link = await get_marzban_sub_url(tg_user_id, tg_user.user.full_name)
+        
+        # Сохраняем ссылку в сессии пользователя
+        bot.user_data[call.from_user.id] = {'sub_link': sub_link}
+        
+        welcome_message += """🎉 Добро пожаловать в VPN-бот SubVPN!
 
-@bot.message_handler(func=lambda message: message.text in [app.capitalize() for apps in APP_URL_SCHEMES.values() for app in apps])
-async def generate_app_link(message: types.Message):
-    """Обработчик для генерации ссылки для конкретного приложения."""
-    if message.from_user.id not in bot.user_data or 'sub_link' not in bot.user_data[message.from_user.id]:
-        await bot.send_message(message.chat.id, "Ошибка: не удалось найти вашу ссылку. Пожалуйста, начните заново с команды /start")
-        return
+Я помогу вам настроить VPN на вашем устройстве. У нас есть поддержка следующих платформ:
+• 📱 iOS/MacOS
+• 🤖 Android
+• 💻 Windows
 
-    app = message.text.lower()
-    system = None
-    
-    # Определяем систему по приложению
-    for sys_name, apps in APP_URL_SCHEMES.items():
-        if app in apps:
-            system = sys_name
-            break
-    
-    if not system:
-        await bot.send_message(message.chat.id, "Ошибка: приложение не найдено")
-        return
+Выберите вашу платформу, и я предоставлю подробные инструкции по установке и настройке VPN.
 
-    # Получаем базовую ссылку
-    base_url = bot.user_data[message.from_user.id]['sub_link']
-    
-    # Генерируем специфическую ссылку
-    app_link = await generate_app_specific_link(
-        base_url,
-        system,
-        app,
-        f"SubVPN_{message.from_user.id}"
-    )
+ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться к администраторам:
+• @urbnywrt
+• @SanchezM
+• @YABLADAHA"""
+        
+        # Создаем inline-кнопки для выбора платформы
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📱 iOS/MacOS", callback_data="platform_ios"),
+            types.InlineKeyboardButton("🤖 Android", callback_data="platform_android"),
+            types.InlineKeyboardButton("💻 PC", callback_data="platform_pc")
+        )
+        
+        await bot.edit_message_text(
+            welcome_message,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+    else:
+        keyboardmain = types.InlineKeyboardMarkup()
+        keyboardmain.add(types.InlineKeyboardButton(text='Подписаться на бусти', url="https://boosty.to/mob5ter"))
+        welcome_message = f"""❌ Упс! Похоже, вы не являетесь подписчиком нашего сервиса.
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text=f"🔗 Открыть ссылку для {message.text}", url=app_link))
-    
-    await bot.send_message(
-        message.chat.id,
-        f"Нажмите на кнопку ниже, чтобы открыть вашу ссылку для {message.text}:",
-        reply_markup=markup
-    )
+Для получения доступа к VPN необходимо:
+1. Подписаться на наш Boosty
+2. Привязать Telegram к аккаунту Boosty
+3. Получить доступ к закрытому каналу
 
-@bot.message_handler(func=lambda message: message.text == "🔙 Назад")
-async def go_back(message: types.Message):
-    """Обработчик для возврата в главное меню."""
-    keyboardmain = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboardmain.add(types.KeyboardButton("📱 Выбрать приложение"))
-    keyboardmain.add(types.KeyboardButton("🔗 Получить общую ссылку"))
-    
-    await bot.send_message(
-        message.chat.id,
-        "Главное меню:",
-        reply_markup=keyboardmain
-    )
+Если у вас уже есть подписка, но вы не можете получить доступ:
+• Свяжитесь с администраторами: @urbnywrt @SanchezM @YABLADAHA
+• Или обратитесь за помощью в чате"""
+        await bot.edit_message_text(
+            welcome_message,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=keyboardmain,
+            parse_mode='HTML'
+        )
 
 async def update_listener(messages):
     for message in messages:
@@ -341,5 +541,50 @@ async def schedule_task():
     while True:
         await asyncio.sleep(2)
 
+
+async def send_message_to_all_users(message_text: str):
+    """Отправляет сообщение всем активным пользователям бота."""
+    try:
+        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
+        users = await api.get_users(token=marzban_token.access_token)
+        
+        for user in users.users:
+            if user.status == 'active' and "SUB_" in user.username:
+                tg_user_id = int(user.username.replace("SUB_", ""))
+                try:
+                    await bot.send_message(
+                        chat_id=tg_user_id,
+                        text=message_text,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"[BROADCAST] Сообщение отправлено пользователю {tg_user_id}")
+                except Exception as e:
+                    logger.error(f"[BROADCAST] Ошибка отправки сообщения пользователю {tg_user_id}: {e}")
+                    continue
+                    
+        logger.info("[BROADCAST] Рассылка завершена")
+    except Exception as e:
+        logger.error(f"[BROADCAST] Ошибка при рассылке: {e}")
+
+@bot.message_handler(commands=['broadcast'])
+async def cmd_broadcast(message: types.Message):
+    """Обработчик команды для отправки сообщения всем пользователям."""
+    if message.chat.type != 'private':
+        return
+        
+    # Проверяем, является ли пользователь администратором
+    if message.from_user.id not in admin_ids:
+        await bot.reply_to(message, "У вас нет прав для использования этой команды.")
+        return
+        
+    # Получаем текст сообщения после команды
+    broadcast_text = message.text.replace('/broadcast', '').strip()
+    if not broadcast_text:
+        await bot.reply_to(message, "Пожалуйста, добавьте текст сообщения после команды /broadcast")
+        return
+        
+    await bot.reply_to(message, "Начинаю рассылку сообщения всем пользователям...")
+    await send_message_to_all_users(broadcast_text)
+    await bot.reply_to(message, "Рассылка завершена!")
 
 asyncio.run(main())

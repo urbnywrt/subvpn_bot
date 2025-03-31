@@ -18,4 +18,5 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PROXY_DOMAIN=${PROXY_DOMAIN}
       - PROXY_PORT=${PROXY_PORT}
+      - ADMIN_ID=${ADMIN_ID}
     restart: unless-stopped 
