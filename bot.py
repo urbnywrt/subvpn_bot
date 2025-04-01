@@ -16,7 +16,7 @@ from marzban import MarzbanAPI, UserCreate, UserModify, ProxySettings
 
 # Настройка логирования
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 LOG_DIR = '/var/log'
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 LOG_BACKUP_COUNT = 5
@@ -31,31 +31,20 @@ logger.setLevel(LOG_LEVEL)
 # Форматтер для логов
 formatter = logging.Formatter(LOG_FORMAT)
 
-# Обработчик для обычных логов
-info_handler = RotatingFileHandler(
+# Обработчик для логов
+file_handler = RotatingFileHandler(
     os.path.join(LOG_DIR, 'bot.log'),
     maxBytes=LOG_MAX_BYTES,
     backupCount=LOG_BACKUP_COUNT,
     encoding='utf-8'
 )
-info_handler.setFormatter(formatter)
-info_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
 
-# Обработчик для ошибок
-error_handler = RotatingFileHandler(
-    os.path.join(LOG_DIR, 'bot.err.log'),
-    maxBytes=LOG_MAX_BYTES,
-    backupCount=LOG_BACKUP_COUNT,
-    encoding='utf-8'
-)
-error_handler.setFormatter(formatter)
-error_handler.setLevel(logging.ERROR)
+# Добавляем обработчик к логгеру
+logger.addHandler(file_handler)
 
-# Добавляем обработчики к логгеру
-logger.addHandler(info_handler)
-logger.addHandler(error_handler)
-
-# Также выводим логи в консоль для отладки
+# Также выводим логи в консоль
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 console_handler.setLevel(LOG_LEVEL)
@@ -466,116 +455,193 @@ async def update_listener(messages):
         try:
             if (message.content_type == 'new_chat_members' or message.content_type == 'left_chat_member') and int(message.chat.id) == target_channel:
                 await bot.delete_message(message.chat.id, message.message_id)
-            else:
-                logger.debug(message)
         except Exception as e:
-            logger.error(f"[TELEGRAM] ERROR update_listener:\n {e}")
-
+            logger.error(f"Ошибка в update_listener: {e}")
 
 async def get_marzban_sub_url(tg_user_id, tg_user_full_name):
     marzban_user = await check_user_marzban(tg_user_id)
     if marzban_user:
-        logger.debug(f"[MARZBAN] USER FOUND\ntg: {tg_user_full_name} - Marzban: {marzban_user.username}")
         return marzban_user.subscription_url
     else:
-        logger.debug(f"[MARZBAN] CREATING NEW USER\ntg: {tg_user_full_name} - Marzban: SUB_{tg_user_id}")
         marzban_new_user = await add_marzban_user(tg_user_id, tg_user_full_name)
         return marzban_new_user.subscription_url
-
 
 async def check_user_in_channel(user_id):
     try:
         user = await bot.get_chat_member(chat_id=target_channel, user_id=user_id)
         if user.status in ['member', 'administrator', 'creator', 'restricted']:
-            logger.debug(f"[TELEGRAM] USER FOUND\ntg: {user_id}-{user.user.full_name}")
             return user
-    except telebot.asyncio_helper.ApiTelegramException as e:
-        logger.warning(f"[TELEGRAM] ApiTelegramException check_user_in_channel:\nuser_id:{user_id}\n{e}")
-        pass
     except Exception as e:
-        logger.error(f"[TELEGRAM] ERROR check_user_in_channel:\n {e}")
-        pass
+        logger.error(f"Ошибка проверки пользователя в канале: {e}")
     return False
-
 
 async def check_user_marzban(tg_id):
     try:
         marzban_token = await api.get_token(username=panel_username, password=panel_pass)
         user = await api.get_user(username=f"SUB_{tg_id}", token=marzban_token.access_token)
-        logger.debug(f"[MARZBAN] USER FOUND: SUB_{tg_id}-{user.note}")
         return user
-    except aiohttp.client_exceptions.ClientResponseError as e:
-        logger.warning(f"[MARZBAN] NOT FOUND OR ERROR check_user_marzban: {e}")
-        return False
     except Exception as e:
-        logger.warning(f"[MARZBAN] NOT FOUND OR ERROR check_user_marzban: {e}")
+        logger.error(f"Ошибка проверки пользователя в Marzban: {e}")
         return False
-
 
 async def add_marzban_user(tg_id, tg_name):
     try:
         marzban_token = await api.get_token(username=panel_username, password=panel_pass)
         sub_date = datetime.datetime.today() + timedelta(days=31)
         new_user = UserCreate(username=f"SUB_{tg_id}",
-                                              note=f"{tg_name}",
-                                              proxies={
-                                                  "vless": ProxySettings(flow="xtls-rprx-vision")                                                  
-                                              },
-                                              expire= int(sub_date.timestamp()),                                            
-                                              status="active",
-                                              inbounds={
-                                                  "vless": [
-                                                      "VLESS TCP REALITY"
-                                                  ]
-                                              })
-        # print(new_user)
+                            note=f"{tg_name}",
+                            proxies={
+                                "vless": ProxySettings(flow="xtls-rprx-vision")                                                  
+                            },
+                            expire=int(sub_date.timestamp()),                                            
+                            status="active",
+                            inbounds={
+                                "vless": [
+                                    "VLESS TCP REALITY"
+                                ]
+                            })
         user = await api.add_user(user=new_user, token=marzban_token.access_token)
-
-        logging.info(f"[MARZBAN] USER CREATED: SUB_{tg_id}-{user.note}")
+        logger.info(f"Создан новый пользователь: SUB_{tg_id}")
         return user
     except Exception as e:
-        logging.warning(f"[MARZBAN] ERROR add_marzban_user: {e}")
+        logger.error(f"Ошибка создания пользователя: {e}")
         return False
 
-
 async def check_tg_and_recharge():
-    logger.debug("CHECK FOR EXPIRED USERS")
-    marzban_token = await api.get_token(username=panel_username, password=panel_pass)
-    users = await api.get_users(token=marzban_token.access_token)
     try:
+        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
+        users = await api.get_users(token=marzban_token.access_token)
+        
         for item in users.users:
-            if item.status == 'expired' and "SUB_" in item.username:
-                # print(item.username + " " + item.status)
-
-
-                tg_user_id = str(item.username).replace("SUB_", "")
-                user = await check_user_in_channel(user_id=int(tg_user_id))
+            if "SUB_" in item.username:
+                try:
+                    tg_user_id = int(item.username.replace("SUB_", ""))
+                except ValueError:
+                    # Пропускаем пользователей с нечисловыми ID
+                    continue
+                    
+                user = await check_user_in_channel(tg_user_id)
+                
                 if user:
-                    # print(user.user.full_name, user.status
-                    sub_date = datetime.datetime.today() + timedelta(days=31)
-
-                    await api.modify_user(username=f"SUB_{tg_user_id}", user=UserModify(username=f"SUB_{tg_user_id}",
-                                                                                         note=f"{user.user.full_name}",
-                                                                                         proxies=item.proxies,
-                                                                                         data_limit=0,
-                                                                                         expire=int(sub_date.timestamp()),
-                                                                                         data_limit_reset_strategy="no_reset",
-                                                                                         status="active",
-                                                                                         inbounds={
-                                                                                             "vless": [
-                                                                                                 "VLESS TCP REALITY"
-                                                                                             ]
-                                                                                         }), token=marzban_token.access_token)
-                    #await panel.reset_user_traffic(user_username=f"SUB_{tg_user_id}", token=mytoken)
-                    logger.info(f"[MARZBAN] user SUB_{tg_user_id} - {user.user.full_name} has been recharged")
+                    # Проверяем, истекла ли подписка
+                    if datetime.datetime.now() > datetime.datetime.fromtimestamp(item.expire):
+                        sub_date = datetime.datetime.today() + timedelta(days=31)
+                        await api.modify_user(username=f"SUB_{tg_user_id}",
+                                            user=UserModify(
+                                                username=f"SUB_{tg_user_id}",
+                                                note=f"{user.user.full_name}",
+                                                proxies=item.proxies,
+                                                data_limit=0,
+                                                expire=int(sub_date.timestamp()),
+                                                data_limit_reset_strategy="no_reset",
+                                                status="active",
+                                                inbounds={
+                                                    "vless": [
+                                                        "VLESS TCP REALITY"
+                                                    ]
+                                                }), token=marzban_token.access_token)
+                        logger.info(f"Продлена подписка пользователя: SUB_{tg_user_id}")
                 else:
-                    logger.debug(f"[MARZBAN] user SUB_{tg_user_id} not found in channel")
                     if datetime.datetime.now() - datetime.datetime.fromtimestamp(item.expire) > timedelta(days=30):
                         await api.remove_user(username=item.username, token=marzban_token.access_token)
-                        logger.info(f"[MARZBAN] USER EXPIRED FOR 30 DAYS AND DELETED : {item.username}")
+                        logger.info(f"Удален просроченный пользователь: {item.username}")
     except Exception as e:
-        logger.warning(f"[MARZBAN] ERROR check_tg_and_recharge:\n {e}")
+        logger.error(f"Ошибка проверки и продления подписок: {e}")
 
+@bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice', 'video_note'])
+async def handle_messages(message: types.Message):
+    """Единый обработчик сообщений для поддержки."""
+    logger.info("="*50)
+    logger.info(f"Обработка сообщения: тип={message.content_type}, чат={message.chat.id}")
+
+    # Определяем тип сообщения и направление
+    is_from_support = str(message.chat.id) == str(SUPPORT_CHAT_ID)
+    is_reply_to_forwarded = message.reply_to_message and message.reply_to_message.forward_from
+    is_private_chat = message.chat.type == 'private'
+    is_in_support_mode = message.from_user.id in bot.user_data and bot.user_data[message.from_user.id].get('in_support')
+
+    try:
+        # Обработка сообщений от пользователей в поддержку
+        if is_private_chat and is_in_support_mode and not is_from_support:
+            logger.info(f"Пересылка сообщения от пользователя {message.from_user.id} в поддержку")
+            
+            # Пересылаем сообщение
+            await bot.forward_message(
+                chat_id=SUPPORT_CHAT_ID,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id
+            )
+            
+            await bot.reply_to(
+                message,
+                "✅ Ваше сообщение отправлено в службу поддержки. Мы ответим вам в ближайшее время."
+            )
+            
+        # Обработка ответов от поддержки пользователям
+        elif is_from_support and is_reply_to_forwarded:
+            logger.info(f"Отправка ответа от поддержки пользователю {message.reply_to_message.forward_from.id}")
+            user_id = message.reply_to_message.forward_from.id
+            
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("💬 Есть еще вопросы", callback_data="support"))
+            markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
+            
+            # Отправляем ответ пользователю
+            if message.content_type == 'text':
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
+                    reply_markup=markup
+                )
+            else:
+                try:
+                    # Сначала отправляем текст о том, что это ответ от поддержки
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text="💬 Ответ от поддержки:"
+                    )
+                    
+                    # Для медиафайлов используем copy_message
+                    await bot.copy_message(
+                        chat_id=user_id,
+                        from_chat_id=message.chat.id,
+                        message_id=message.message_id
+                    )
+                    
+                    # Отправляем кнопки навигации
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text="Если у вас остались вопросы, нажмите кнопку ниже.",
+                        reply_markup=markup
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка при копировании медиафайла: {e}")
+                    # Пробуем альтернативный способ отправки
+                    try:
+                        if message.photo:
+                            await bot.send_photo(user_id, message.photo[-1].file_id, caption=message.caption)
+                        elif message.video:
+                            await bot.send_video(user_id, message.video.file_id, caption=message.caption)
+                        elif message.document:
+                            await bot.send_document(user_id, message.document.file_id)
+                        elif message.sticker:
+                            await bot.send_sticker(user_id, message.sticker.file_id)
+                        elif message.voice:
+                            await bot.send_voice(user_id, message.voice.file_id)
+                        elif message.video_note:
+                            await bot.send_video_note(user_id, message.video_note.file_id)
+                    except Exception as e2:
+                        logger.error(f"Ошибка при альтернативной отправке медиафайла: {e2}")
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text="❌ К сожалению, произошла ошибка при отправке медиафайла. Пожалуйста, попробуйте позже.",
+                            reply_markup=markup
+                        )
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки сообщения: {e}")
+        
+    logger.info("="*50)
 
 async def main():
     
@@ -683,137 +749,6 @@ async def cmd_support(message: types.Message):
             message,
             "❌ К сожалению, служба поддержки временно недоступна. Пожалуйста, попробуйте позже."
         )
-
-@bot.message_handler(func=lambda message: message.chat.type == 'private' and message.chat.id != SUPPORT_CHAT_ID)
-async def forward_to_support(message: types.Message):
-    """Пересылает сообщения пользователей в чат поддержки."""
-    # Проверяем, находится ли пользователь в режиме поддержки
-    if message.from_user.id not in bot.user_data or not bot.user_data[message.from_user.id].get('in_support'):
-        return
-            
-    logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
-    logger.info(f"Тип сообщения: {message.content_type}")
-    
-    try:
-        # Проверяем существование чата поддержки
-        chat = await bot.get_chat(SUPPORT_CHAT_ID)
-        logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
-        
-        # Пересылаем сообщение в зависимости от его типа
-        if message.photo:
-            await bot.send_photo(
-                chat_id=SUPPORT_CHAT_ID,
-                photo=message.photo[-1].file_id,
-                caption=message.caption if message.caption else None
-            )
-        elif message.video:
-            await bot.send_video(
-                chat_id=SUPPORT_CHAT_ID,
-                video=message.video.file_id,
-                caption=message.caption if message.caption else None
-            )
-        elif message.document:
-            await bot.send_document(
-                chat_id=SUPPORT_CHAT_ID,
-                document=message.document.file_id,
-                caption=message.caption if message.caption else None
-            )
-        else:
-            # Для текстовых сообщений используем forward_message
-            await bot.forward_message(
-                chat_id=SUPPORT_CHAT_ID,
-                from_chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-        
-        # Отправляем подтверждение пользователю
-        await bot.reply_to(
-            message,
-            "✅ Ваше сообщение отправлено в службу поддержки. Мы ответим вам в ближайшее время."
-        )
-        
-        logger.info(f"Сообщение успешно переслано в чат поддержки")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки сообщения в поддержку: {e}")
-        logger.error(f"Тип ошибки: {type(e)}")
-        logger.error(f"Полный текст ошибки: {str(e)}")
-        logger.error(f"ID чата поддержки: {SUPPORT_CHAT_ID}")
-        logger.error(f"ID отправителя: {message.from_user.id}")
-        await bot.reply_to(
-            message,
-            "❌ К сожалению, произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже."
-        )
-
-@bot.message_handler(func=lambda message: message.chat.id == SUPPORT_CHAT_ID)
-async def handle_support_message(message: types.Message):
-    """Обработчик сообщений в чате поддержки."""
-    # Проверяем, является ли сообщение ответом на пересланное сообщение от пользователя
-    if message.reply_to_message and message.reply_to_message.forward_from:
-        # Если это ответ на пересланное сообщение
-        user_id = message.reply_to_message.forward_from.id
-        try:
-            # Создаем клавиатуру с кнопками
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("💬 Есть еще вопросы", callback_data="support"))
-            markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
-            
-            logger.info(f"Обработка ответа от поддержки для пользователя {user_id}")
-            logger.info(f"Тип сообщения: {message.content_type}")
-            
-            # Если сообщение содержит фото
-            if message.photo:
-                logger.info("Отправка фото пользователю")
-                # Отправляем фото с подписью
-                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
-                await bot.send_photo(
-                    chat_id=user_id,
-                    photo=message.photo[-1].file_id,
-                    caption=caption,
-                    reply_markup=markup
-                )
-            # Если сообщение содержит видео
-            elif message.video:
-                logger.info("Отправка видео пользователю")
-                # Отправляем видео с подписью
-                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
-                await bot.send_video(
-                    chat_id=user_id,
-                    video=message.video.file_id,
-                    caption=caption,
-                    reply_markup=markup
-                )
-            # Если сообщение содержит документ
-            elif message.document:
-                logger.info("Отправка документа пользователю")
-                # Отправляем документ с подписью
-                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
-                await bot.send_document(
-                    chat_id=user_id,
-                    document=message.document.file_id,
-                    caption=caption,
-                    reply_markup=markup
-                )
-            # Если сообщение содержит только текст
-            elif message.text:
-                # Отправляем текстовое сообщение
-                await bot.send_message(
-                    chat_id=user_id,
-                    text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
-                    reply_markup=markup
-                )
-            else:
-                logger.warning(f"Неизвестный тип сообщения: {message.content_type}")
-                await bot.reply_to(message, "❌ Не удалось отправить ответ. Неподдерживаемый тип сообщения.")
-            
-            await bot.reply_to(message, "✅ Ответ отправлен пользователю")
-        except Exception as e:
-            logger.error(f"Ошибка отправки ответа пользователю: {e}")
-            logger.error(f"Тип ошибки: {type(e)}")
-            logger.error(f"Полный текст ошибки: {str(e)}")
-            logger.error(f"ID пользователя: {user_id}")
-            logger.error(f"Тип сообщения: {message.content_type}")
-            await bot.reply_to(message, "❌ Ошибка отправки ответа. Возможно, пользователь заблокировал бота.")
-    # Игнорируем все остальные сообщения в чате поддержки
 
 # Добавляем обработчик для кнопки поддержки
 @bot.callback_query_handler(func=lambda call: call.data == "support")
