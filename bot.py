@@ -693,19 +693,38 @@ async def forward_to_support(message: types.Message):
             
     logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
     logger.info(f"Тип сообщения: {message.content_type}")
-    logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
     
     try:
         # Проверяем существование чата поддержки
         chat = await bot.get_chat(SUPPORT_CHAT_ID)
         logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
         
-        # Пересылаем оригинальное сообщение
-        await bot.forward_message(
-            chat_id=SUPPORT_CHAT_ID,
-            from_chat_id=message.chat.id,
-            message_id=message.message_id
-        )
+        # Пересылаем сообщение в зависимости от его типа
+        if message.photo:
+            await bot.send_photo(
+                chat_id=SUPPORT_CHAT_ID,
+                photo=message.photo[-1].file_id,
+                caption=message.caption if message.caption else None
+            )
+        elif message.video:
+            await bot.send_video(
+                chat_id=SUPPORT_CHAT_ID,
+                video=message.video.file_id,
+                caption=message.caption if message.caption else None
+            )
+        elif message.document:
+            await bot.send_document(
+                chat_id=SUPPORT_CHAT_ID,
+                document=message.document.file_id,
+                caption=message.caption if message.caption else None
+            )
+        else:
+            # Для текстовых сообщений используем forward_message
+            await bot.forward_message(
+                chat_id=SUPPORT_CHAT_ID,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id
+            )
         
         # Отправляем подтверждение пользователю
         await bot.reply_to(
@@ -740,14 +759,10 @@ async def handle_support_message(message: types.Message):
             
             logger.info(f"Обработка ответа от поддержки для пользователя {user_id}")
             logger.info(f"Тип сообщения: {message.content_type}")
-            logger.info(f"Наличие фото: {bool(message.photo)}")
-            logger.info(f"Наличие видео: {bool(message.video)}")
-            logger.info(f"Наличие документа: {bool(message.document)}")
             
             # Если сообщение содержит фото
             if message.photo:
                 logger.info("Отправка фото пользователю")
-                logger.info(f"Размер фото: {message.photo[-1].file_size}")
                 # Отправляем фото с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_photo(
@@ -759,7 +774,6 @@ async def handle_support_message(message: types.Message):
             # Если сообщение содержит видео
             elif message.video:
                 logger.info("Отправка видео пользователю")
-                logger.info(f"Размер видео: {message.video.file_size}")
                 # Отправляем видео с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_video(
@@ -771,7 +785,6 @@ async def handle_support_message(message: types.Message):
             # Если сообщение содержит документ
             elif message.document:
                 logger.info("Отправка документа пользователю")
-                logger.info(f"Размер документа: {message.document.file_size}")
                 # Отправляем документ с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_document(
@@ -780,13 +793,18 @@ async def handle_support_message(message: types.Message):
                     caption=caption,
                     reply_markup=markup
                 )
-            else:
+            # Если сообщение содержит только текст
+            elif message.text:
                 # Отправляем текстовое сообщение
                 await bot.send_message(
                     chat_id=user_id,
                     text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
                     reply_markup=markup
                 )
+            else:
+                logger.warning(f"Неизвестный тип сообщения: {message.content_type}")
+                await bot.reply_to(message, "❌ Не удалось отправить ответ. Неподдерживаемый тип сообщения.")
+            
             await bot.reply_to(message, "✅ Ответ отправлен пользователю")
         except Exception as e:
             logger.error(f"Ошибка отправки ответа пользователю: {e}")
