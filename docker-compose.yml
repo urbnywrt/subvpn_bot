@@ -4,11 +4,12 @@ services:
   bot:
     image: ghcr.io/urbnywrt/subvpn_bot:latest
     container_name: subvpn_bot
+    restart: always
     volumes:
-      - /var/lib/marzban/certs:/certs:ro  # Путь на сервере
+      - /var/lib/marzban/certs:/certs:ro
+      - /var/log/bot:/var/log
     ports:
-      - "4443:4443"  # Порт для прокси-сервера
-    restart: unless-stopped 
+      - "4443:4443"
     networks:
       bot_network:
         ipv4_address: 172.20.0.2
@@ -24,7 +25,7 @@ services:
       - ADMIN_ID=${ADMIN_ID}
       - SUPPORT_CHAT_ID=${SUPPORT_CHAT_ID}
       - SUPPORT_BOT_USERNAME=${SUPPORT_BOT_USERNAME}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_LEVEL=${LOG_LEVEL}
 
 networks:
   bot_network:

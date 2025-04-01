@@ -4,6 +4,7 @@ import logging
 import os
 from datetime import timedelta
 import urllib.parse
+from logging.handlers import RotatingFileHandler
 
 import aiohttp
 import telebot
@@ -15,11 +16,50 @@ from marzban import MarzbanAPI, UserCreate, UserModify, ProxySettings
 
 # Настройка логирования
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_DIR = '/var/log'
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+LOG_BACKUP_COUNT = 5
+
+# Создаем директорию для логов, если она не существует
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Настраиваем логгер
 logger = logging.getLogger(__name__)
+logger.setLevel(LOG_LEVEL)
+
+# Форматтер для логов
+formatter = logging.Formatter(LOG_FORMAT)
+
+# Обработчик для обычных логов
+info_handler = RotatingFileHandler(
+    os.path.join(LOG_DIR, 'bot.log'),
+    maxBytes=LOG_MAX_BYTES,
+    backupCount=LOG_BACKUP_COUNT,
+    encoding='utf-8'
+)
+info_handler.setFormatter(formatter)
+info_handler.setLevel(logging.INFO)
+
+# Обработчик для ошибок
+error_handler = RotatingFileHandler(
+    os.path.join(LOG_DIR, 'bot.err.log'),
+    maxBytes=LOG_MAX_BYTES,
+    backupCount=LOG_BACKUP_COUNT,
+    encoding='utf-8'
+)
+error_handler.setFormatter(formatter)
+error_handler.setLevel(logging.ERROR)
+
+# Добавляем обработчики к логгеру
+logger.addHandler(info_handler)
+logger.addHandler(error_handler)
+
+# Также выводим логи в консоль для отладки
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+console_handler.setLevel(LOG_LEVEL)
+logger.addHandler(console_handler)
 
 # Загрузка переменных окружения
 target_channel = int(os.environ['TARGET_CHANNEL'])
@@ -647,7 +687,7 @@ async def cmd_support(message: types.Message):
 @bot.message_handler(func=lambda message: message.chat.type == 'private' and message.chat.id != SUPPORT_CHAT_ID)
 async def forward_to_support(message: types.Message):
     """Пересылает сообщения пользователей в чат поддержки."""
-    if not message.text and not message.photo and not message.video:  # Игнорируем пустые сообщения
+    if not message.text and not message.photo and not message.video and not message.document:  # Игнорируем пустые сообщения
         return
         
     # Проверяем, находится ли пользователь в режиме поддержки
@@ -655,6 +695,7 @@ async def forward_to_support(message: types.Message):
         return
             
     logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
+    logger.info(f"Тип сообщения: {message.content_type}")
     logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
     
     try:
@@ -700,8 +741,12 @@ async def handle_support_message(message: types.Message):
             markup.add(types.InlineKeyboardButton("💬 Есть еще вопросы", callback_data="support"))
             markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
             
+            logger.info(f"Обработка ответа от поддержки для пользователя {user_id}")
+            logger.info(f"Тип сообщения: {message.content_type}")
+            
             # Если сообщение содержит фото
             if message.photo:
+                logger.info("Отправка фото пользователю")
                 # Отправляем фото с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_photo(
@@ -712,11 +757,23 @@ async def handle_support_message(message: types.Message):
                 )
             # Если сообщение содержит видео
             elif message.video:
+                logger.info("Отправка видео пользователю")
                 # Отправляем видео с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_video(
                     chat_id=user_id,
                     video=message.video.file_id,
+                    caption=caption,
+                    reply_markup=markup
+                )
+            # Если сообщение содержит документ
+            elif message.document:
+                logger.info("Отправка документа пользователю")
+                # Отправляем документ с подписью
+                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
+                await bot.send_document(
+                    chat_id=user_id,
+                    document=message.document.file_id,
                     caption=caption,
                     reply_markup=markup
                 )
@@ -730,6 +787,8 @@ async def handle_support_message(message: types.Message):
             await bot.reply_to(message, "✅ Ответ отправлен пользователю")
         except Exception as e:
             logger.error(f"Ошибка отправки ответа пользователю: {e}")
+            logger.error(f"Тип ошибки: {type(e)}")
+            logger.error(f"Полный текст ошибки: {str(e)}")
             await bot.reply_to(message, "❌ Ошибка отправки ответа. Возможно, пользователь заблокировал бота.")
     # Игнорируем все остальные сообщения в чате поддержки
 
