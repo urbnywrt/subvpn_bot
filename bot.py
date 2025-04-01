@@ -687,9 +687,6 @@ async def cmd_support(message: types.Message):
 @bot.message_handler(func=lambda message: message.chat.type == 'private' and message.chat.id != SUPPORT_CHAT_ID)
 async def forward_to_support(message: types.Message):
     """Пересылает сообщения пользователей в чат поддержки."""
-    if not message.text and not message.photo and not message.video and not message.document:  # Игнорируем пустые сообщения
-        return
-        
     # Проверяем, находится ли пользователь в режиме поддержки
     if message.from_user.id not in bot.user_data or not bot.user_data[message.from_user.id].get('in_support'):
         return
@@ -743,10 +740,14 @@ async def handle_support_message(message: types.Message):
             
             logger.info(f"Обработка ответа от поддержки для пользователя {user_id}")
             logger.info(f"Тип сообщения: {message.content_type}")
+            logger.info(f"Наличие фото: {bool(message.photo)}")
+            logger.info(f"Наличие видео: {bool(message.video)}")
+            logger.info(f"Наличие документа: {bool(message.document)}")
             
             # Если сообщение содержит фото
             if message.photo:
                 logger.info("Отправка фото пользователю")
+                logger.info(f"Размер фото: {message.photo[-1].file_size}")
                 # Отправляем фото с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_photo(
@@ -758,6 +759,7 @@ async def handle_support_message(message: types.Message):
             # Если сообщение содержит видео
             elif message.video:
                 logger.info("Отправка видео пользователю")
+                logger.info(f"Размер видео: {message.video.file_size}")
                 # Отправляем видео с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_video(
@@ -769,6 +771,7 @@ async def handle_support_message(message: types.Message):
             # Если сообщение содержит документ
             elif message.document:
                 logger.info("Отправка документа пользователю")
+                logger.info(f"Размер документа: {message.document.file_size}")
                 # Отправляем документ с подписью
                 caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
                 await bot.send_document(
@@ -789,6 +792,8 @@ async def handle_support_message(message: types.Message):
             logger.error(f"Ошибка отправки ответа пользователю: {e}")
             logger.error(f"Тип ошибки: {type(e)}")
             logger.error(f"Полный текст ошибки: {str(e)}")
+            logger.error(f"ID пользователя: {user_id}")
+            logger.error(f"Тип сообщения: {message.content_type}")
             await bot.reply_to(message, "❌ Ошибка отправки ответа. Возможно, пользователь заблокировал бота.")
     # Игнорируем все остальные сообщения в чате поддержки
 
