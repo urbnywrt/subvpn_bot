@@ -415,10 +415,11 @@ async def handle_refresh_menu(call):
         )
         markup.add(types.InlineKeyboardButton("💬 Поддержка", callback_data="support"))
         
-        # Отправляем новое сообщение с главным меню
-        await bot.send_message(
-            call.message.chat.id,
+        # Редактируем существующее сообщение
+        await bot.edit_message_text(
             welcome_message,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
             reply_markup=markup,
             parse_mode='HTML'
         )
@@ -439,10 +440,11 @@ async def handle_refresh_menu(call):
 Если у вас уже есть подписка, но вы не можете получить доступ:
 • Обратитесь за помощью в поддержку"""
         
-        # Отправляем новое сообщение с главным меню
-        await bot.send_message(
-            call.message.chat.id,
+        # Редактируем существующее сообщение
+        await bot.edit_message_text(
             welcome_message,
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
             reply_markup=keyboardmain,
             parse_mode='HTML'
         )
@@ -513,7 +515,7 @@ async def check_tg_and_recharge():
         users = await api.get_users(token=marzban_token.access_token)
         
         for item in users.users:
-            if "SUB_" in item.username:
+            if item.status == 'expired' and "SUB_" in item.username:
                 try:
                     tg_user_id = int(item.username.replace("SUB_", ""))
                 except ValueError:
@@ -524,7 +526,6 @@ async def check_tg_and_recharge():
                 
                 if user:
                     # Проверяем, истекла ли подписка
-                    if datetime.datetime.now() > datetime.datetime.fromtimestamp(item.expire):
                         sub_date = datetime.datetime.today() + timedelta(days=31)
                         await api.modify_user(username=f"SUB_{tg_user_id}",
                                             user=UserModify(
@@ -547,6 +548,138 @@ async def check_tg_and_recharge():
                         logger.info(f"Удален просроченный пользователь: {item.username}")
     except Exception as e:
         logger.error(f"Ошибка проверки и продления подписок: {e}")
+
+async def send_message_to_all_users(message_text: str, progress_message=None):
+    """Отправляет сообщение всем активным пользователям бота."""
+    try:
+        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
+        users = await api.get_users(token=marzban_token.access_token)
+        
+        # Фильтруем только активных пользователей
+        active_users = [user for user in users.users if user.status == 'active' and "SUB_" in user.username]
+        total_users = len(active_users)
+        
+        success_count = 0
+        fail_count = 0
+        current_count = 0
+        
+        for user in active_users:
+            try:
+                # Пробуем получить числовой ID из username
+                tg_user_id = int(user.username.replace("SUB_", ""))
+            except ValueError:
+                logger.warning(f"Пропущен пользователь с некорректным ID: {user.username}")
+                fail_count += 1
+                current_count += 1
+                continue
+            
+            # Проверяем, является ли пользователь подписчиком канала
+            if not await check_user_in_channel(tg_user_id):
+                logger.warning(f"Пропущен пользователь {tg_user_id}: не является подписчиком канала")
+                fail_count += 1
+                current_count += 1
+                continue
+                
+            try:
+                await bot.send_message(
+                    chat_id=tg_user_id,
+                    text=message_text,
+                    parse_mode='HTML'
+                )
+                logger.info(f"[BROADCAST] Сообщение отправлено пользователю {tg_user_id}")
+                success_count += 1
+                # Добавляем задержку между отправками
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                logger.error(f"[BROADCAST] Ошибка отправки сообщения пользователю {tg_user_id}: {e}")
+                fail_count += 1
+            
+            current_count += 1
+            
+            # Обновляем прогресс-бар каждые 5 сообщений или если это последнее сообщение
+            if progress_message and (current_count % 5 == 0 or current_count == total_users):
+                progress = (current_count / total_users) * 100
+                progress_bar = "█" * int(progress / 2) + "░" * (50 - int(progress / 2))
+                status_text = f"📤 Рассылка в процессе...\n\n{progress_bar} {progress:.1f}%\n\n"
+                status_text += f"✅ Успешно: {success_count}\n"
+                status_text += f"❌ Неудачно: {fail_count}\n"
+                status_text += f"📊 Всего: {current_count}/{total_users}"
+                
+                try:
+                    await bot.edit_message_text(
+                        status_text,
+                        chat_id=progress_message.chat.id,
+                        message_id=progress_message.message_id
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка обновления прогресс-бара: {e}")
+                    
+        logger.info(f"[BROADCAST] Рассылка завершена. Успешно: {success_count}, Неудачно: {fail_count}")
+        return success_count, fail_count
+    except Exception as e:
+        logger.error(f"[BROADCAST] Ошибка при рассылке: {e}")
+        return 0, 0
+
+@bot.message_handler(commands=['broadcast'], content_types=['text'])
+async def broadcast(message: types.Message):
+    """Рассылка сообщения всем пользователям."""
+    logger.info("="*50)
+    logger.info(f"[BROADCAST] Получена команда от пользователя {message.from_user.id}")
+    logger.info(f"[BROADCAST] Тип чата: {message.chat.type}")
+    logger.info(f"[BROADCAST] Текст сообщения: {message.text}")
+    logger.info(f"[BROADCAST] Текущие admin_ids: {admin_ids}")
+    logger.info(f"[BROADCAST] ID пользователя в списке админов: {str(message.from_user.id) in admin_ids}")
+    
+    # Проверяем, что команда отправлена в личные сообщения
+    if message.chat.type != 'private':
+        logger.warning(f"[BROADCAST] Команда отправлена не в личные сообщения: {message.chat.type}")
+        await bot.reply_to(message, "❌ Эта команда работает только в личных сообщениях с ботом.")
+        return
+    
+    # Проверяем права администратора
+    if message.from_user.id not in admin_ids:
+        logger.warning(f"[BROADCAST] Отказано в доступе пользователю {message.from_user.id}")
+        await bot.reply_to(message, "❌ У вас нет прав для выполнения этой команды.")
+        return
+
+    # Получаем текст для рассылки
+    broadcast_text = message.text.replace('/broadcast', '').strip()
+    if not broadcast_text:
+        logger.warning("[BROADCAST] Получена пустая команда без текста")
+        await bot.reply_to(message, "❌ Пожалуйста, добавьте текст для рассылки после команды /broadcast")
+        return
+
+    logger.info(f"[BROADCAST] Начинаю рассылку текста: {broadcast_text}")
+
+    try:
+        # Создаем прогресс-бар
+        progress_message = await bot.reply_to(message, "📤 Подготовка к рассылке...")
+        logger.info("[BROADCAST] Создан прогресс-бар")
+        
+        # Отправляем сообщение всем пользователям
+        success_count, fail_count = await send_message_to_all_users(f"{broadcast_text}", progress_message)
+        logger.info(f"[BROADCAST] Рассылка завершена. Успешно: {success_count}, Неудачно: {fail_count}")
+        
+        # Отправляем итоговый отчет
+        final_report = (
+            f"✅ Рассылка завершена!\n\n"
+            f"📊 Статистика:\n"
+            f"✅ Успешно отправлено: {success_count}\n"
+            f"❌ Не удалось отправить: {fail_count}\n"
+            f"📝 Текст сообщения:\n{broadcast_text}"
+        )
+        await bot.edit_message_text(
+            final_report,
+            chat_id=message.chat.id,
+            message_id=progress_message.message_id
+        )
+        logger.info("[BROADCAST] Отправлен итоговый отчет")
+        
+    except Exception as e:
+        logger.error(f"[BROADCAST] Ошибка при выполнении рассылки: {e}")
+        await bot.reply_to(message, f"❌ Произошла ошибка при выполнении рассылки: {str(e)}")
+    
+    logger.info("="*50)
 
 @bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice', 'video_note'])
 async def handle_messages(message: types.Message):
@@ -644,6 +777,11 @@ async def handle_messages(message: types.Message):
     logger.info("="*50)
 
 async def main():
+    # Регистрируем команды бота
+    commands = [
+        types.BotCommand(command='start', description='Запустить бота')
+    ]
+    await bot.set_my_commands(commands)
     
     chat = await bot.get_chat(target_channel)
     bot.set_update_listener(update_listener)
@@ -666,63 +804,6 @@ async def schedule_task():
     while True:
         await asyncio.sleep(2)
 
-
-async def send_message_to_all_users(message_text: str):
-    """Отправляет сообщение всем активным пользователям бота."""
-    try:
-        marzban_token = await api.get_token(username=panel_username, password=panel_pass)
-        users = await api.get_users(token=marzban_token.access_token)
-        
-        for user in users.users:
-            if user.status == 'active' and "SUB_" in user.username:
-                try:
-                    # Пробуем получить числовой ID из username
-                    tg_user_id = int(user.username.replace("SUB_", ""))
-                except ValueError:
-                    # Если не удалось преобразовать в число, пропускаем пользователя
-                    logger.warning(f"Пропущен пользователь с некорректным ID: {user.username}")
-                    continue
-                    
-                try:
-                    await bot.send_message(
-                        chat_id=tg_user_id,
-                        text=message_text,
-                        parse_mode='HTML'
-                    )
-                    logger.info(f"[BROADCAST] Сообщение отправлено пользователю {tg_user_id}")
-                except Exception as e:
-                    logger.error(f"[BROADCAST] Ошибка отправки сообщения пользователю {tg_user_id}: {e}")
-                    continue
-                    
-        logger.info("[BROADCAST] Рассылка завершена")
-    except Exception as e:
-        logger.error(f"[BROADCAST] Ошибка при рассылке: {e}")
-
-@bot.message_handler(commands=['broadcast'])
-async def broadcast(message: types.Message):
-    """Рассылка сообщения всем пользователям."""
-    if str(message.from_user.id) not in admin_ids:
-        await bot.reply_to(message, "❌ У вас нет прав для выполнения этой команды.")
-        return
-
-    # Получаем текст для рассылки
-    broadcast_text = message.text.replace('/broadcast', '').strip()
-    if not broadcast_text:
-        await bot.reply_to(message, "❌ Пожалуйста, добавьте текст для рассылки после команды /broadcast")
-        return
-
-    # Создаем прогресс-бар
-    progress_message = await bot.reply_to(message, "📤 Начинаю рассылку...")
-    
-    # Отправляем сообщение всем пользователям
-    await send_message_to_all_users(f"{broadcast_text}")
-    
-    # Отправляем итоговый отчет
-    await bot.edit_message_text(
-        "✅ Рассылка завершена!",
-        chat_id=message.chat.id,
-        message_id=progress_message.message_id
-    )
 
 @bot.message_handler(commands=['support'])
 async def cmd_support(message: types.Message):
@@ -789,5 +870,17 @@ async def handle_support_button(call):
             call.message.chat.id,
             "❌ К сожалению, служба поддержки временно недоступна. Пожалуйста, попробуйте позже."
         )
+
+# Добавляем обработчик для всех сообщений для отладки
+@bot.message_handler(func=lambda message: True)
+async def debug_all_messages(message: types.Message):
+    """Отладочный обработчик для всех сообщений."""
+    logger.info("="*50)
+    logger.info(f"[DEBUG] Получено сообщение: {message.text}")
+    logger.info(f"[DEBUG] От пользователя: {message.from_user.id}")
+    logger.info(f"[DEBUG] Тип чата: {message.chat.type}")
+    logger.info(f"[DEBUG] Тип контента: {message.content_type}")
+    logger.info(f"[DEBUG] Команды: {message.entities}")
+    logger.info("="*50)
 
 asyncio.run(main())
