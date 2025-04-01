@@ -104,7 +104,7 @@ APP_DOWNLOAD_LINKS = {
         'V2RayTun': 'https://play.google.com/store/apps/details?id=com.v2raytun.android',
     },
     'pc': {
-        'hiddify': 'https://apps.microsoft.com/store/detail/hiddify-next/9N2B0K8Z5Z5F',
+        'hiddify': 'https://apps.microsoft.com/detail/9pdfnl3qv2s5',
         'v2rayN': 'https://github.com/2dust/v2rayN/releases/latest',
         'karing': 'https://github.com/KaringX/karing/releases/latest'
     }
