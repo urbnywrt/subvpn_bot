@@ -15,7 +15,10 @@ from marzban import MarzbanAPI, UserCreate, UserModify, ProxySettings
 
 # Настройка логирования
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
-logging.basicConfig(level=LOG_LEVEL)
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
@@ -28,6 +31,14 @@ bot_token = os.environ['BOT_TOKEN']
 proxy_domain = os.environ['PROXY_DOMAIN']
 proxy_port = os.environ['PROXY_PORT']
 admin_ids = [int(id.strip()) for id in os.environ.get('ADMIN_ID', '').split(',') if id.strip()]
+SUPPORT_CHAT_ID = int(os.environ.get('SUPPORT_CHAT_ID', 0))  # ID чата для поддержки
+SUPPORT_BOT_USERNAME = os.environ.get('SUPPORT_BOT_USERNAME', '')  # Username бота поддержки
+
+# Логируем важные переменные при запуске
+logger.info(f"Загруженные переменные окружения:")
+logger.info(f"SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+logger.info(f"SUPPORT_BOT_USERNAME: {SUPPORT_BOT_USERNAME}")
+logger.info(f"ADMIN_IDS: {admin_ids}")
 
 # Словарь с URL-схемами для разных приложений
 APP_URL_SCHEMES = {
@@ -110,10 +121,7 @@ async def vpn_message(message):
 
 Выберите вашу платформу, и я предоставлю подробные инструкции по установке и настройке VPN.
 
-ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться к администраторам:
-• @urbnywrt
-• @SanchezM
-• @YABLADAHA"""
+ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться в чат поддержки."""
         
         # Создаем inline-кнопки для выбора платформы
         markup = types.InlineKeyboardMarkup(row_width=2)
@@ -122,6 +130,7 @@ async def vpn_message(message):
             types.InlineKeyboardButton("🤖 Android", callback_data="platform_android"),
             types.InlineKeyboardButton("💻 PC", callback_data="platform_pc")
         )
+        markup.add(types.InlineKeyboardButton("💬 Поддержка", callback_data="support"))
         
         await bot.send_message(
             message.chat.id, 
@@ -130,18 +139,19 @@ async def vpn_message(message):
             parse_mode='HTML'
         )
     else:
+        # Создаем кнопку для подписки
         keyboardmain = types.InlineKeyboardMarkup()
         keyboardmain.add(types.InlineKeyboardButton(text='Подписаться на бусти', url="https://boosty.to/mob5ter"))
+        keyboardmain.add(types.InlineKeyboardButton(text='💬 Поддержка', callback_data="support"))
         welcome_message = f"""❌ Упс! Похоже, вы не являетесь подписчиком нашего сервиса.
 
-Для получения доступа к VPN необходимо:
+Для получения доступа к прокси необходимо:
 1. Подписаться на наш Boosty
 2. Привязать Telegram к аккаунту Boosty
 3. Получить доступ к закрытому каналу
 
 Если у вас уже есть подписка, но вы не можете получить доступ:
-• Свяжитесь с администраторами: @YABLADAHA или @urbnywrt
-• Или обратитесь за помощью в чате"""
+• Обратитесь за помощью в поддержку"""
         await bot.send_message(message.chat.id, text=welcome_message, reply_markup=keyboardmain, parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('platform_'))
@@ -346,6 +356,10 @@ async def handle_refresh_menu(call):
     tg_user = await check_user_in_channel(tg_user_id)
     welcome_message = f"👋 Привет, {user_link(call.from_user)}!\n\n"
     
+    # Сбрасываем флаг режима поддержки
+    if call.from_user.id in bot.user_data:
+        bot.user_data[call.from_user.id]['in_support'] = False
+    
     if tg_user:
         sub_link = await get_marzban_sub_url(tg_user_id, tg_user.user.full_name)
         
@@ -361,10 +375,7 @@ async def handle_refresh_menu(call):
 
 Выберите вашу платформу, и я предоставлю подробные инструкции по установке и настройке VPN.
 
-ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться к администраторам:
-• @urbnywrt
-• @SanchezM
-• @YABLADAHA"""
+ℹ️ Если у вас возникнут вопросы, не стесняйтесь обращаться в поддержку."""
         
         # Создаем inline-кнопки для выбора платформы
         markup = types.InlineKeyboardMarkup(row_width=2)
@@ -373,34 +384,42 @@ async def handle_refresh_menu(call):
             types.InlineKeyboardButton("🤖 Android", callback_data="platform_android"),
             types.InlineKeyboardButton("💻 PC", callback_data="platform_pc")
         )
+        markup.add(types.InlineKeyboardButton("💬 Поддержка", callback_data="support"))
         
-        await bot.edit_message_text(
+        # Отправляем новое сообщение с главным меню
+        await bot.send_message(
+            call.message.chat.id,
             welcome_message,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
             reply_markup=markup,
             parse_mode='HTML'
         )
+        
+        # Отвечаем на callback query
+        await bot.answer_callback_query(call.id)
     else:
         keyboardmain = types.InlineKeyboardMarkup()
         keyboardmain.add(types.InlineKeyboardButton(text='Подписаться на бусти', url="https://boosty.to/mob5ter"))
+        keyboardmain.add(types.InlineKeyboardButton(text='💬 Поддержка', callback_data="support"))
         welcome_message = f"""❌ Упс! Похоже, вы не являетесь подписчиком нашего сервиса.
 
-Для получения доступа к VPN необходимо:
+Для получения доступа к прокси необходимо:
 1. Подписаться на наш Boosty
 2. Привязать Telegram к аккаунту Boosty
 3. Получить доступ к закрытому каналу
 
 Если у вас уже есть подписка, но вы не можете получить доступ:
-• Свяжитесь с администраторами: @urbnywrt @SanchezM @YABLADAHA
-• Или обратитесь за помощью в чате"""
-        await bot.edit_message_text(
+• Обратитесь за помощью в поддержку"""
+        
+        # Отправляем новое сообщение с главным меню
+        await bot.send_message(
+            call.message.chat.id,
             welcome_message,
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
             reply_markup=keyboardmain,
             parse_mode='HTML'
         )
+        
+        # Отвечаем на callback query
+        await bot.answer_callback_query(call.id)
 
 async def update_listener(messages):
     for message in messages:
@@ -550,7 +569,14 @@ async def send_message_to_all_users(message_text: str):
         
         for user in users.users:
             if user.status == 'active' and "SUB_" in user.username:
-                tg_user_id = int(user.username.replace("SUB_", ""))
+                try:
+                    # Пробуем получить числовой ID из username
+                    tg_user_id = int(user.username.replace("SUB_", ""))
+                except ValueError:
+                    # Если не удалось преобразовать в число, пропускаем пользователя
+                    logger.warning(f"Пропущен пользователь с некорректным ID: {user.username}")
+                    continue
+                    
                 try:
                     await bot.send_message(
                         chat_id=tg_user_id,
@@ -567,24 +593,162 @@ async def send_message_to_all_users(message_text: str):
         logger.error(f"[BROADCAST] Ошибка при рассылке: {e}")
 
 @bot.message_handler(commands=['broadcast'])
-async def cmd_broadcast(message: types.Message):
-    """Обработчик команды для отправки сообщения всем пользователям."""
+async def broadcast(message: types.Message):
+    """Рассылка сообщения всем пользователям."""
+    if str(message.from_user.id) not in admin_ids:
+        await bot.reply_to(message, "❌ У вас нет прав для выполнения этой команды.")
+        return
+
+    # Получаем текст для рассылки
+    broadcast_text = message.text.replace('/broadcast', '').strip()
+    if not broadcast_text:
+        await bot.reply_to(message, "❌ Пожалуйста, добавьте текст для рассылки после команды /broadcast")
+        return
+
+    # Создаем прогресс-бар
+    progress_message = await bot.reply_to(message, "📤 Начинаю рассылку...")
+    
+    # Отправляем сообщение всем пользователям
+    await send_message_to_all_users(f"{broadcast_text}")
+    
+    # Отправляем итоговый отчет
+    await bot.edit_message_text(
+        "✅ Рассылка завершена!",
+        chat_id=message.chat.id,
+        message_id=progress_message.message_id
+    )
+
+@bot.message_handler(commands=['support'])
+async def cmd_support(message: types.Message):
+    """Обработчик команды для обращения в поддержку."""
     if message.chat.type != 'private':
         return
         
-    # Проверяем, является ли пользователь администратором
-    if message.from_user.id not in admin_ids:
-        await bot.reply_to(message, "У вас нет прав для использования этой команды.")
+    logger.info(f"Получена команда /support от пользователя {message.from_user.id}")
+    logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+    
+    # Проверяем существование чата поддержки
+    try:
+        chat = await bot.get_chat(SUPPORT_CHAT_ID)
+        logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
+        await bot.reply_to(
+            message,
+            "💬 Напишите ваше сообщение, и я передам его в службу поддержки. Наши специалисты ответят вам в ближайшее время."
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при проверке чата поддержки: {e}")
+        logger.error(f"Тип ошибки: {type(e)}")
+        logger.error(f"Полный текст ошибки: {str(e)}")
+        await bot.reply_to(
+            message,
+            "❌ К сожалению, служба поддержки временно недоступна. Пожалуйста, попробуйте позже."
+        )
+
+@bot.message_handler(func=lambda message: message.chat.type == 'private' and message.chat.id != SUPPORT_CHAT_ID)
+async def forward_to_support(message: types.Message):
+    """Пересылает сообщения пользователей в чат поддержки."""
+    if not message.text.startswith('/'):  # Игнорируем команды
+        # Проверяем, находится ли пользователь в режиме поддержки
+        if message.from_user.id not in bot.user_data or not bot.user_data[message.from_user.id].get('in_support'):
+            return
+            
+        logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
+        logger.info(f"Текст сообщения: {message.text[:100]}...")  # Логируем только первые 100 символов
+        logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+        
+        try:
+            # Проверяем существование чата поддержки
+            chat = await bot.get_chat(SUPPORT_CHAT_ID)
+            logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
+            
+            # Пересылаем оригинальное сообщение
+            await bot.forward_message(
+                chat_id=SUPPORT_CHAT_ID,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id
+            )
+            
+            # Отправляем подтверждение пользователю
+            await bot.reply_to(
+                message,
+                "✅ Ваше сообщение отправлено в службу поддержки. Мы ответим вам в ближайшее время."
+            )
+            
+            logger.info(f"Сообщение успешно переслано в чат поддержки")
+        except Exception as e:
+            logger.error(f"Ошибка пересылки сообщения в поддержку: {e}")
+            logger.error(f"Тип ошибки: {type(e)}")
+            logger.error(f"Полный текст ошибки: {str(e)}")
+            logger.error(f"ID чата поддержки: {SUPPORT_CHAT_ID}")
+            logger.error(f"ID отправителя: {message.from_user.id}")
+            await bot.reply_to(
+                message,
+                "❌ К сожалению, произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже."
+            )
+
+@bot.message_handler(func=lambda message: message.chat.id == SUPPORT_CHAT_ID)
+async def handle_support_message(message: types.Message):
+    """Обработчик сообщений в чате поддержки."""
+    # Проверяем, является ли сообщение ответом на пересланное сообщение от пользователя
+    if message.reply_to_message and message.reply_to_message.forward_from:
+        # Если это ответ на пересланное сообщение
+        user_id = message.reply_to_message.forward_from.id
+        try:
+            # Создаем клавиатуру с кнопками
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("💬 Есть еще вопросы", callback_data="support"))
+            markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
+            
+            # Отправляем ответ пользователю с кнопками
+            await bot.send_message(
+                chat_id=user_id,
+                text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
+                reply_markup=markup
+            )
+            await bot.reply_to(message, "✅ Ответ отправлен пользователю")
+        except Exception as e:
+            logger.error(f"Ошибка отправки ответа пользователю: {e}")
+            await bot.reply_to(message, "❌ Ошибка отправки ответа. Возможно, пользователь заблокировал бота.")
+    # Игнорируем все остальные сообщения в чате поддержки
+
+# Добавляем обработчик для кнопки поддержки
+@bot.callback_query_handler(func=lambda call: call.data == "support")
+async def handle_support_button(call):
+    """Обработчик нажатия кнопки поддержки."""
+    if call.message.chat.type != 'private':
         return
         
-    # Получаем текст сообщения после команды
-    broadcast_text = message.text.replace('/broadcast', '').strip()
-    if not broadcast_text:
-        await bot.reply_to(message, "Пожалуйста, добавьте текст сообщения после команды /broadcast")
-        return
+    logger.info(f"Нажата кнопка поддержки от пользователя {call.from_user.id}")
+    logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+    
+    # Проверяем существование чата поддержки
+    try:
+        chat = await bot.get_chat(SUPPORT_CHAT_ID)
+        logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
+        await bot.answer_callback_query(call.id)
         
-    await bot.reply_to(message, "Начинаю рассылку сообщения всем пользователям...")
-    await send_message_to_all_users(broadcast_text)
-    await bot.reply_to(message, "Рассылка завершена!")
+        # Устанавливаем флаг, что пользователь находится в режиме поддержки
+        if call.from_user.id not in bot.user_data:
+            bot.user_data[call.from_user.id] = {}
+        bot.user_data[call.from_user.id]['in_support'] = True
+        
+        # Создаем клавиатуру с кнопкой возврата в главное меню
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
+        
+        await bot.send_message(
+            call.message.chat.id,
+            "💬 Напишите ваше сообщение, и я передам его в службу поддержки. Наши специалисты ответят вам в ближайшее время.",
+            reply_markup=markup
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при проверке чата поддержки: {e}")
+        logger.error(f"Тип ошибки: {type(e)}")
+        logger.error(f"Полный текст ошибки: {str(e)}")
+        await bot.answer_callback_query(call.id)
+        await bot.send_message(
+            call.message.chat.id,
+            "❌ К сожалению, служба поддержки временно недоступна. Пожалуйста, попробуйте позже."
+        )
 
 asyncio.run(main())

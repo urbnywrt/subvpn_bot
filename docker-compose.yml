@@ -5,7 +5,7 @@ services:
     build: .
     container_name: subvpn_bot
     volumes:
-      - /var/lib/marzban/certs:/certs:ro
+      - /var/lib/marzban/certs:/certs:ro  # Путь на сервере
     ports:
       - "4443:4443"  # Порт для прокси-сервера
     environment:
@@ -19,4 +19,6 @@ services:
       - PROXY_DOMAIN=${PROXY_DOMAIN}
       - PROXY_PORT=${PROXY_PORT}
       - ADMIN_ID=${ADMIN_ID}
+      - SUPPORT_CHAT_ID=${SUPPORT_CHAT_ID}
+      - SUPPORT_BOT_USERNAME=${SUPPORT_BOT_USERNAME}
     restart: unless-stopped 

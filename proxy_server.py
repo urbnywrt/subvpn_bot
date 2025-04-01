@@ -57,10 +57,19 @@ async def redirect_to_app(system: str, app: str, url: str, name: str = None):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PROXY_PORT", "8443"))
+    # Проверяем наличие локальных сертификатов
+    if os.path.exists("./certs/key.pem") and os.path.exists("./certs/fullchain.pem"):
+        ssl_keyfile = "./certs/key.pem"
+        ssl_certfile = "./certs/fullchain.pem"
+    else:
+        # Если локальных нет, используем серверные
+        ssl_keyfile = "/certs/key.pem"
+        ssl_certfile = "/certs/fullchain.pem"
+    
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=port,
-        ssl_keyfile="/certs/key.pem",
-        ssl_certfile="/certs/fullchain.pem"
+        ssl_keyfile=ssl_keyfile,
+        ssl_certfile=ssl_certfile
     ) 

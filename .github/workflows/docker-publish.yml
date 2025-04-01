@@ -36,5 +36,5 @@ jobs:
             name: subvpn-bot
             file: docker-compose.yml
             standalone: true
-            env_json: '{"LOG_LEVEL": "INFO","BOT_TOKEN": "${{secrets.BOT_TOKEN}}","CHECK_COOLDOWN": "10","PANEL_ADDRESS":"${{secrets.PANEL_ADDRESS}}","PANEL_PASS":"${{secrets.PANEL_PASS}}","PANEL_USERNAME":"${{secrets.PANEL_USERNAME}}","TARGET_CHANNEL":"${{secrets.TARGET_CHANNEL}}","PROXY_DOMAIN":"${{secrets.PROXY_DOMAIN}}","PROXY_PORT":"${{secrets.PROXY_PORT}}","ADMIN_ID":"${{secrets.ADMIN_ID}}"}'
+            env_json: '{"LOG_LEVEL": "INFO","BOT_TOKEN": "${{secrets.BOT_TOKEN}}","CHECK_COOLDOWN": "10","PANEL_ADDRESS":"${{secrets.PANEL_ADDRESS}}","PANEL_PASS":"${{secrets.PANEL_PASS}}","PANEL_USERNAME":"${{secrets.PANEL_USERNAME}}","TARGET_CHANNEL":"${{secrets.TARGET_CHANNEL}}","PROXY_DOMAIN":"${{secrets.PROXY_DOMAIN}}","PROXY_PORT":"${{secrets.PROXY_PORT}}","ADMIN_ID":"${{secrets.ADMIN_ID}}","SUPPORT_CHAT_ID":"${{secrets.SUPPORT_CHAT_ID}}","SUPPORT_BOT_USERNAME":"${{secrets.SUPPORT_BOT_USERNAME}}"}'
              

@@ -11,5 +11,7 @@ __pycache__/
 *.pfx
 *.p12
 *.p12
-.vscode/ 
+.vscode/
+certs/*
+!certs/.gitkeep 
 
