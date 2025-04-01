@@ -647,44 +647,45 @@ async def cmd_support(message: types.Message):
 @bot.message_handler(func=lambda message: message.chat.type == 'private' and message.chat.id != SUPPORT_CHAT_ID)
 async def forward_to_support(message: types.Message):
     """Пересылает сообщения пользователей в чат поддержки."""
-    if not message.text.startswith('/'):  # Игнорируем команды
-        # Проверяем, находится ли пользователь в режиме поддержки
-        if message.from_user.id not in bot.user_data or not bot.user_data[message.from_user.id].get('in_support'):
-            return
-            
-        logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
-        logger.info(f"Текст сообщения: {message.text[:100]}...")  # Логируем только первые 100 символов
-        logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+    if not message.text and not message.photo and not message.video:  # Игнорируем пустые сообщения
+        return
         
-        try:
-            # Проверяем существование чата поддержки
-            chat = await bot.get_chat(SUPPORT_CHAT_ID)
-            logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
+    # Проверяем, находится ли пользователь в режиме поддержки
+    if message.from_user.id not in bot.user_data or not bot.user_data[message.from_user.id].get('in_support'):
+        return
             
-            # Пересылаем оригинальное сообщение
-            await bot.forward_message(
-                chat_id=SUPPORT_CHAT_ID,
-                from_chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-            
-            # Отправляем подтверждение пользователю
-            await bot.reply_to(
-                message,
-                "✅ Ваше сообщение отправлено в службу поддержки. Мы ответим вам в ближайшее время."
-            )
-            
-            logger.info(f"Сообщение успешно переслано в чат поддержки")
-        except Exception as e:
-            logger.error(f"Ошибка пересылки сообщения в поддержку: {e}")
-            logger.error(f"Тип ошибки: {type(e)}")
-            logger.error(f"Полный текст ошибки: {str(e)}")
-            logger.error(f"ID чата поддержки: {SUPPORT_CHAT_ID}")
-            logger.error(f"ID отправителя: {message.from_user.id}")
-            await bot.reply_to(
-                message,
-                "❌ К сожалению, произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже."
-            )
+    logger.info(f"Получено сообщение от пользователя {message.from_user.id}")
+    logger.info(f"Текущий SUPPORT_CHAT_ID: {SUPPORT_CHAT_ID}")
+    
+    try:
+        # Проверяем существование чата поддержки
+        chat = await bot.get_chat(SUPPORT_CHAT_ID)
+        logger.info(f"Чат поддержки найден: {chat.title} (ID: {chat.id})")
+        
+        # Пересылаем оригинальное сообщение
+        await bot.forward_message(
+            chat_id=SUPPORT_CHAT_ID,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id
+        )
+        
+        # Отправляем подтверждение пользователю
+        await bot.reply_to(
+            message,
+            "✅ Ваше сообщение отправлено в службу поддержки. Мы ответим вам в ближайшее время."
+        )
+        
+        logger.info(f"Сообщение успешно переслано в чат поддержки")
+    except Exception as e:
+        logger.error(f"Ошибка пересылки сообщения в поддержку: {e}")
+        logger.error(f"Тип ошибки: {type(e)}")
+        logger.error(f"Полный текст ошибки: {str(e)}")
+        logger.error(f"ID чата поддержки: {SUPPORT_CHAT_ID}")
+        logger.error(f"ID отправителя: {message.from_user.id}")
+        await bot.reply_to(
+            message,
+            "❌ К сожалению, произошла ошибка при отправке сообщения. Пожалуйста, попробуйте позже."
+        )
 
 @bot.message_handler(func=lambda message: message.chat.id == SUPPORT_CHAT_ID)
 async def handle_support_message(message: types.Message):
@@ -699,12 +700,33 @@ async def handle_support_message(message: types.Message):
             markup.add(types.InlineKeyboardButton("💬 Есть еще вопросы", callback_data="support"))
             markup.add(types.InlineKeyboardButton("🏠 В главное меню", callback_data="refresh_menu"))
             
-            # Отправляем ответ пользователю с кнопками
-            await bot.send_message(
-                chat_id=user_id,
-                text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
-                reply_markup=markup
-            )
+            # Если сообщение содержит фото
+            if message.photo:
+                # Отправляем фото с подписью
+                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=message.photo[-1].file_id,
+                    caption=caption,
+                    reply_markup=markup
+                )
+            # Если сообщение содержит видео
+            elif message.video:
+                # Отправляем видео с подписью
+                caption = f"💬 Ответ от поддержки:\n\n{message.caption if message.caption else ''}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже."
+                await bot.send_video(
+                    chat_id=user_id,
+                    video=message.video.file_id,
+                    caption=caption,
+                    reply_markup=markup
+                )
+            else:
+                # Отправляем текстовое сообщение
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=f"💬 Ответ от поддержки:\n\n{message.text}\n\nЕсли у вас остались вопросы, нажмите кнопку ниже.",
+                    reply_markup=markup
+                )
             await bot.reply_to(message, "✅ Ответ отправлен пользователю")
         except Exception as e:
             logger.error(f"Ошибка отправки ответа пользователю: {e}")

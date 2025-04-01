@@ -2,12 +2,16 @@ version: '3.8'
 
 services:
   bot:
-    build: .
+    image: ghcr.io/urbnywrt/subvpn_bot:latest
     container_name: subvpn_bot
     volumes:
       - /var/lib/marzban/certs:/certs:ro  # Путь на сервере
     ports:
       - "4443:4443"  # Порт для прокси-сервера
+    restart: unless-stopped 
+    networks:
+      bot_network:
+        ipv4_address: 172.20.0.2
     environment:
       - TARGET_CHANNEL=${TARGET_CHANNEL}
       - CHECK_COOLDOWN=${CHECK_COOLDOWN}
@@ -15,10 +19,17 @@ services:
       - PANEL_PASS=${PANEL_PASS}
       - PANEL_ADDRESS=${PANEL_ADDRESS}
       - BOT_TOKEN=${BOT_TOKEN}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PROXY_DOMAIN=${PROXY_DOMAIN}
       - PROXY_PORT=${PROXY_PORT}
       - ADMIN_ID=${ADMIN_ID}
       - SUPPORT_CHAT_ID=${SUPPORT_CHAT_ID}
       - SUPPORT_BOT_USERNAME=${SUPPORT_BOT_USERNAME}
-    restart: unless-stopped 
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+networks:
+  bot_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16 
